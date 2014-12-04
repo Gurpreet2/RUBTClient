@@ -326,7 +326,10 @@ public class Message {
 	 */
 	public static Message createBitfield(RUBTClient client) {
 		if (client.havePieces == null) return null;
-		byte[] bitfield = new byte[client.numOfPieces/8 + 1];
+		// If the number of pieces is divisible by 8, make an array of size numOfPieces/8, else make one of size numOfPieces/8 + 1
+		byte[] bitfield = 
+				new byte[((double)client.numOfPieces)/8 == (double)(client.numOfPieces/8) ?
+						client.numOfPieces/8 : client.numOfPieces/8 + 1];
 		for (int i = 0; i < client.numOfPieces; i++) {
 			if (client.havePieces[i]) {
 				MyTools.setBit(bitfield, i);
