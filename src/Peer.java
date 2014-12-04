@@ -135,9 +135,19 @@ public class Peer extends Thread{
 	boolean isRandomPeer = false;
 	
 	/**
-	 *  The duration that the peer has been choking the client. TODO For keep alive timer and all that, still need to implement
+	 *  For sending keep_alives to the peer. The time (in milliseconds) when the last message was sent.
 	 */
-	int durationChoked;
+	long clientKeepAlive;
+	
+	/**
+	 *  For keeping a connection alive with a peer. The time (in milliseconds) when the last message was received.
+	 */
+	long peerKeepAlive;
+	
+	/**
+	 *  The interval (in milliseconds) in which a message needs to be communicated to a peer to keep the connection alive.
+	 */
+	final long MAX_KEEPALIVE_INTERVAL = 110000;
 	
 	/**
 	 *  True while there are no problems in working with the peer.
@@ -188,23 +198,23 @@ public class Peer extends Thread{
 	 */
 	public void run() {
         	
-        // If restarting a connection...
-       	if (this.socket == null) this.connect();
-		
+	        // If restarting a connection...
+	       	if (this.socket == null) this.connect();
+			
 		logger.info("Started exchanging messages with peer: (" + this.peerId + ").");
-		
+			
 		// Send bitfield
-        if (!this.sentBitfield && this.clientBitfield != null) {
-        	System.out.println("sending bitfield");
-        	this.sendMessage(this.clientBitfield);
-        	this.sentBitfield = true;
-        }
-        
-        int count = 0;
-        while (this.RUN && this.client.RUN) {
-        	
-        	if (this.socketInput == null) this.connect();
-        	
+	        if (!this.sentBitfield && this.clientBitfield != null) {
+	        	System.out.println("sending bitfield");
+	        	this.sendMessage(this.clientBitfield);
+	        	this.sentBitfield = true;
+	        }
+	        
+	        int count = 0;
+	        while (this.RUN && this.client.RUN) {
+	        	
+	        	if (this.socketInput == null) this.connect();
+	        	
 			try {
 				Message.dealWithMessage(this, this.socketInput);
 			} catch (IOException e) {
@@ -215,7 +225,7 @@ public class Peer extends Thread{
 			
 			if (this.peerChoking) {
 				try {
-					Thread.sleep(200);
+					Thread.sleep(200); //TODO something else...?
 				} catch (InterruptedException e) {}
 				if (this.amInterested) this.sendMessage(Message.createInterested());
 			}
@@ -238,8 +248,22 @@ public class Peer extends Thread{
 				MyTools.saveDownloadedPieces(client);
 				if (!this.peerInterested) this.shutdown();
 			}
-        }
-        logger.info("End of thread. Peer ID : [ " + this.peerId + " ]."); 
+	
+			// Send keep_alive if needed
+			if (System.currentTimeMillis() - this.clientKeepAlive > MAX_KEEPALIVE_INTERVAL) {
+				if (this.amInterested) {
+					this.sendMessage(Message.createKeepAlive());
+					this.clientKeepAlive = System.currentTimeMillis();
+					this.peerKeepAlive = System.currentTimeMillis();
+				}
+			}
+			
+			// Check if the peer wants to keep the connection open
+			if (System.currentTimeMillis() - this.peerKeepAlive > MAX_KEEPALIVE_INTERVAL + 25000) {
+				this.shutdown();
+			}
+	        }
+	        logger.info("End of thread. Peer ID : [ " + this.peerId + " ]."); 
 	}
 	
 	
@@ -385,13 +409,18 @@ public class Peer extends Thread{
 	 * @param message -> the message that will be sent
 	 */
 	public void sendMessage(Message message) {
+		this.clientKeepAlive = System.currentTimeMillis();
 		if (this.socket.isClosed()) {
 			logger.info("Could not send {" + message_types[message.message_id]
 					+ "} message to Peer ID : [ " + this.peerId + " ]. Socket is closed.");
 			return;
 		}
-		if (message.intPayload != null)
+		if (message.message_id != -1)
 			logger.info("Sending {" + message_types[message.message_id] + "} message to Peer " 
+					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
+					+ " ].");
+		else
+			logger.info("Sending {KEEP_ALIVE} message to Peer " 
 					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
 					+ " ].");
 		try {
