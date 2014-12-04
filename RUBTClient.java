@@ -1,522 +1,365 @@
-package GivenTools;
+/*
+ *  @author Gurpreet Pannu, Priyam Patel, Michael Norris
+ */
+
+
 
 import java.io.*;
-
+import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.URL;
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import GivenTools.Peer;
-import GivenTools.Tracker;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.UUID;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.logging.Logger;
+import javax.swing.JFrame;
 
-public class RUBTClient extends Thread{
+import Tools.TorrentInfo;
 
-	public static final char[] HEX_CHARS = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 
-		'A', 'B', 'C', 'D', 'E', 'F'};
+public class RUBTClient extends JFrame implements Runnable{
 	
-	protected static boolean client_running = true;
-	protected Tracker tracker;
-	protected Thread ClientThread;
-	protected TorrentInfo torr_info;
-	protected int downloaded, uploaded, left;
-	protected int totalPieces, piece_length, file_length;
-	protected int peersUnchoked = 0;
-	protected int maxPeers = 3;
-	protected byte[] bitfield;
-	protected boolean am_seed = false;
-	protected String client_id = null;
-	protected ArrayList<Peer> peerHistory;
-	protected ArrayList<Peer> peers;
-	protected ArrayList<Piece> piece_arr;
-	private RandomAccessFile outFile;
-	private ConcurrentLinkedQueue<Message> messages = new ConcurrentLinkedQueue<Message>();
+	/**
+	 *  Needed this.
+	 */
+	private static final long serialVersionUID = 1L;
 	
-	public RUBTClient(TorrentInfo torr, Tracker track, RandomAccessFile filename, String client_peer_id) {
-		System.out.println("Creating: Client Thread");
-		this.tracker = track;
-		this.torr_info = torr;
-		this.downloaded = 0;
-		this.uploaded = 0;
-		this.client_id = client_peer_id;
-		this.file_length = torr.file_length;
-		this.bitfield = new byte[this.torr_info.piece_hashes.length];
-		this.piece_arr = generatePieces();
-		if(filename == null){
-			System.out.println("Output file does not exist. Starting a new session.");
-			this.bitfield = new byte[this.torr_info.piece_hashes.length];
-			this.left = torr.file_length;
-			//updateLeft();
-		}
-		else{
-			System.out.println("Output file exists! Resuming previous session..");
-			this.left = torr.file_length;
-			//updateLeft();
-		}
+	/**
+	 *  The logger for the class.
+	 */
+	private static final Logger logger = Logger.getLogger(RUBTClient.class.getName());
+	
+	/**
+	 *  The name of the torrent metainfo file.
+	 */
+	static String metainfoFile;
+	
+	/**
+	 *  The name of the torrent download file.
+	 */
+	static String downloadFile;
+	
+	/**
+	 *  A peer ip. If specified, client will connect to it and start downloading from it.
+	 */
+	String onlyPeer;
+	
+	/**
+	 *  This will be the peer id associated with the client
+	 */
+	String clientId;
+	
+	/**
+	 *  This will be the amount of bytes left to download from peers, initially will be set to size of full file
+	 */
+	volatile int bytesLeft;
+	
+	/**
+	 *  How many bytes have been uploaded to peers. (Initialization only for fresh downloads, corrected in main if continuing download)
+	 */
+	volatile int bytesUploaded = 0;
+
+	/**
+	 *  How many bytes have been downloaded so far. (Initialization only for fresh downloads, corrected in main if continuing download)
+	 */
+	volatile int bytesDownloaded = 0;
+	
+	/**
+	 *  The metainfo file of the torrent will be stored in here
+	 */
+	TorrentInfo torrentInfo;
+	
+	/**
+	 *  Response from the tracker after sending it a "started" announcement will be stored in response_1
+	 */
+	Response response1;
+
+	/**
+	 *  Responses from the tracker after sending it periodic announcements will be stored in response_2
+	 */
+	Response response2;
+	
+	/**
+	 *  This arraylist stores the peers in a peer objects arraylist
+	 */
+	ArrayList<Peer> peers;
+	
+	/**
+	 *  Number of blocks there are to download
+	 */
+	volatile int numOfPieces;
+	
+	/**
+	 *  This will contain the raw bytes being downloaded
+	 */
+	volatile byte[] rawFileBytes;
+	
+	/**
+	 *  A boolean array indicating whether or not a piece has been downloaded. Will help for sending bitfield.
+	 */
+	volatile boolean[] havePieces;
+	
+	/**
+	 *  The number of pieces the client has.
+	 */
+	volatile int numOfHavePieces = 0;
+	
+	/**
+	 *  An array that will be used to send have messages to peers 
+	 *  (set to true when piece finishes downloading, reset to false after sending have message to all peers)
+	 */
+	volatile LinkedBlockingQueue<Message> haveSendQueue = new LinkedBlockingQueue<Message>(20);
+	
+	/**
+	 *  This will be used to send requests to peers, and to limit the amount of requests to send.
+	 */
+	volatile LinkedBlockingQueue<Message> requestSendQueue = new LinkedBlockingQueue<Message>(20);
+	
+	/**
+	 *  Interval for sending announcements to tracker
+	 */
+	static int announceTimerInterval = 120;
+
+	/**
+	 *  Value that is true while file is downloading, false when file finishes downloading.
+	 */
+	volatile boolean RUN = true;
+	
+	public RUBTClient() {
 		
+		// Generate a peer ID for the client
+		String str = UUID.randomUUID().toString();
+		this.clientId = "-RUBT11-" + str.substring(0,8) + str.substring(9,13);// + str.substring(14,16);// + str.substring(19,23);
 	}
 	
-	
+	public static void main(String[] args) {
+		
+		RUBTClient client = new RUBTClient();
+		
+		// Make sure that the number of command line arguments is 2 or 3
+		if (args.length != 2 && args.length != 3) {
+            System.out.println("Usage: java RUBTClient <torrent file> <download file>\n");
+            System.out.println("or\n");
+            System.out.println("Usage: java RUBTClient <torrent file> <download file> <peer ip>\n");
+            return;
+        }
+		
+		// Create a text file for the logger
+		/*try {
+			logger.setUseParentHandlers(false); // Don't print logs to the console. (Less clutter)
+			FileHandler filehandler = new FileHandler("logger.txt");
+			logger.addHandler(filehandler);
+			SimpleFormatter simpleformatter = new SimpleFormatter();
+			filehandler.setFormatter(simpleformatter);
+		} catch (IOException e) {
+			System.err.println("The logger text save file could not be set up.");
+			e.printStackTrace();
+		}*/
+		
+		// Hold the cammand line arguments in some variables so they can be called from methods outside main
+		RUBTClient.metainfoFile = args[0];
+		RUBTClient.downloadFile = args[1];
+		if (args.length == 3) client.onlyPeer = args[2];
+		
+		// Convert the torrent metainfo file into a TorrentInfo file, and use it to initialize some variables for client
+        client.torrentInfo = MyTools.getTorrentInfo(RUBTClient.metainfoFile);
+        client.numOfPieces = client.torrentInfo.piece_hashes.length;
+        // If the client was stopped earlier, and the download file exists, fill rawFileBytes with the bytes from the file
+        if (!MyTools.setDownloadedBytes(client)) {
+        	logger.info("Download file found, resuming download.");
+        } else {
+        	// Else, initialize variables needed for a fresh download
+        	logger.info("Starting new download.");
+	        client.bytesLeft = client.torrentInfo.file_length;
+	        client.havePieces = new boolean[client.numOfPieces];
+	        client.rawFileBytes = new byte[client.torrentInfo.file_length];
+        }
+        
+        // Connect to the Tracker and send a started announcement
+        new Request(client, "started");
+        logger.info("Sent started announcement to tracker.");
+        
+        // Check if something went wrong with the tracker response and print the failure reason.
+        if (client.response1.failure_reason != null) {
+        	System.out.println("Torrent failed to download, failure reason:\n   " + client.response1.failure_reason);
+        	logger.info(client.response1.failure_reason);
+        	return;
+        }
+        
+        /*// Input Reader
+        InputReader ir = client.new InputReader();
+        ir.start();*/
+        
+        // Put peer_map into a peer array so it can be more easily used and read, also start the threads for each peer
+        if (args.length == 2) {
+	        ArrayList<Map<ByteBuffer, Object>> peer_map = client.response1.get_peer_map();
+	        client.peers = MyTools.createPeerList(client, peer_map);
+	        // Start connecting to and messaging peers
+	        /*for (Peer peer : client.peers) {
+	        	System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
+	    		peer.start();
+	        }*/
+        } else {
+        	int port, count = 0;
+        	do {
+        		port = MyTools.findPort(client.onlyPeer);
+        		count++;
+        	} while (port == 0 && count < 3);
+        	if (count == 3) {
+        		logger.info("No open port found for single Peer: (" + client.onlyPeer + "). Exiting program...");
+        		System.err.println("Could not find an open port to connect to the peer in the range 6881 - 6890. Exiting...");
+        		return;
+        	}
+        	client.peers.add(new Peer(null, client.onlyPeer, port, client));
+        }
+        client.peers.get(1).start();
+        
+        // Thread start for client
+        new Thread(client).start();
+        
+		//PeerListener peerListener = client.new PeerListener();
+		//peerListener.runPeerListener(); TODO does this even work
+	}
 
 
-	
-	private boolean amInterested(Peer peer) {
-		if (this.left == 0) {
-			return false;
-		}
-
-		// Inspect bitfield
-		//System.out.println("Total pieces: " + this.totalPieces);
-		for (int pieceIndex = 0; pieceIndex < this.totalPieces; pieceIndex++) {
-			if (!Utility.isSetBit((this.bitfield), pieceIndex)
-					&& Utility.isSetBit((peer.bitfield), pieceIndex)) {
-				return true;
+	/**
+	 *  This is the thread for the client. It sends periodic tracker announcements, waits for input
+	 *  from the user, sends have messages, and requests, and runs until the file is downloaded.
+	 */
+	public void run() {
+		
+        logger.info("Started thread for client.");
+		
+		// Setup a timer to send periodic announcements to the tracker.
+		Timer timer = new Timer();
+		TimerTask timerTask = new TimerTask() {
+			@Override
+			public void run() {
+				logger.info("Regular announcement sent to tracker.");
+				new Request(RUBTClient.this, "");
+				if (RUBTClient.this.response2 != null) //sanity check
+					RUBTClient.announceTimerInterval = 
+						(RUBTClient.this.response2.interval > 120) ? 120 : RUBTClient.this.response2.interval;
 			}
-		}
-		return false;
-	}
-	
-	
-	private void StopClient(){
-		if(ClientThread.isAlive()){
-			//client.dropConnection
-		}
-	}
-	
-	public  boolean verifyPiece(int index, byte[] piece){
+		};
+		timer.schedule(timerTask, 60*1000, RUBTClient.announceTimerInterval * 1000);
 		
-		ByteBuffer bb = torr_info.piece_hashes[index];
-		
-		MessageDigest SHA1 = null;
-		
-		try{
-			SHA1 = MessageDigest.getInstance("SHA-1");
-		}
-		catch(NoSuchAlgorithmException e){
-			System.out.println(e);
-		}
-		
-		SHA1.update(piece);
-		byte[] pieceHash = SHA1.digest();
-		
-		if(Arrays.equals(pieceHash, bb.array())){
-			return true;
-		}
-		else{
-			return false;
-		}
-
-	}
-	private void setBitfieldBit(final int bit) {
-		byte[] tempBitfield = this.bitfield;
-		tempBitfield = Utility.setBit(tempBitfield, bit);
-		this.bitfield =  tempBitfield;
-	}
-	private void resetBitfieldBit(final int bit) {
-		byte[] tempBitfield = this.bitfield;
-		tempBitfield = Utility.resetBit(tempBitfield, bit);
-		this.bitfield = tempBitfield;
-	}
-	private void setBitfield() throws IOException {
-		final int bytes = (int) Math.ceil(this.totalPieces / 8.0);
-		this.bitfield = new byte[bytes];
-
-		for (int pieceIndex = 0; pieceIndex < this.totalPieces; pieceIndex++) {
-			byte[] temp;
-			if (pieceIndex == this.totalPieces - 1) {
-				// Last piece
-				temp = new byte[this.file_length % this.piece_length];
-			} else {
-				temp = new byte[this.piece_length];
-			}
-			this.outFile.read(temp);
-			if (this.verifyPiece(pieceIndex, temp)) {
-				this.setBitfieldBit(pieceIndex);
-				this.left = this.left - temp.length;
-			} else {
-				this.resetBitfieldBit(pieceIndex);
-			}
-		}
-	}
-	
-	public int getPieceIndex(){
-		int i = 0;
-		for(byte b : bitfield){
-			if(b == 0){
-				return i;
-			}
-			i++;
-		}
-		return -1;
-	}
-	
-	public void run(){
-		// Create URL, send announce.
-		URL trackerURL = this.tracker.create_url(this.torr_info, this.torr_info.announce_url.toExternalForm(), this.client_id, this.uploaded, this.downloaded, this.left, "started");	
-		if(trackerURL == null){
-			System.err.println("Error creating tracker url");
-			System.exit(1);
-		}
-		this.tracker.tracker_url = trackerURL;
-		
-		int min_interval = this.tracker.tracker_minInterval * 1000;
-		int interval = this.tracker.tracker_interval * 1000;
-
-		// If min interval not set, then set it to half of interval time.		
-		min_interval = min_interval == 0 ? interval/2 : min_interval;
-		long last_announceTime = System.currentTimeMillis();
-		
-		int index = 0, offset, length;
-		byte[] block;
-		while(client_running){
-			if ((System.currentTimeMillis() - last_announceTime) >= (min_interval)) {
-				this.tracker.announce();
-				System.out.println("Sending tracker announce. Client status : ");
-				last_announceTime = System.currentTimeMillis();
+		int downloaded = this.bytesDownloaded;
+		System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
+		while(this.RUN) {
+			
+			// Prints how far along the download is, whenever the download progresses.
+			if (downloaded != this.bytesDownloaded) {
+				System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
+				downloaded = this.bytesDownloaded;
 			}
 			
+			// This sends have messages when required
+			if (!this.haveSendQueue.isEmpty()) {
+				try {
+					Message message = this.haveSendQueue.take();
+					for (Peer peer : peers) {
+						if (peer.socket == null || peer.socketOutput == null) continue;
+						if (peer.socket.isClosed()) continue;
+						peer.sendMessage(message);
+					}
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			if (this.bytesLeft == 0) this.RUN = false;
+		}
+		
+		timer.cancel();
+		
+		new Request(this, "completed");
+		logger.info("Sent completed announcement to tracker.");
+        
+        // After the threads have been shutdown, save the downloaded rawfilebytes into a file.
+        MyTools.saveDownloadedPieces(this);
+	}
+	
+	
+	/**
+	 * This class listens for incoming connections from peers and allocates a socket for a connection.
+	 *
+	 */
+	class PeerListener extends Thread {
+		
+		public PeerListener() {
+		}
+		
+		public void runPeerListener() {
+			
+			ServerSocket serverSocket;
+			Socket peerSocket;
+			
 			try {
-				/* Change into this:
-				 * Message msg = message_queue.dequeue(); // also change msg var name
-				 * Peer peer = msg.getPeer();
-				 */
-				//System.out.println("here");
-				Message msg = this.messages.poll();
-				if(msg == null){
-					continue;
-				}
-				Peer peer = msg.getPeer();
-				System.out.println("Recv: " + msg + " from peer " + peer.getId());
-				switch(msg.getMessageID()){
-				case -1: // Keep Alive
-					peer.sendMessage(Message.keepAliveMessage());
-					break;
-				case 0: // Received Choke
-					peer.localChoked = true;
-					break;
-				case 1: // Received Unchoke
-					peer.localChoked = false;   
-					if(this.amInterested(peer)){
-						System.out.println("HEHE I AM INTEREST");
-						peer.sendMessage(Message.requestMessage(0, 0, 16384));
-					}
-					break;
-				case 2: // Received Interested
-					peer.remoteInterested = true;
-
-				/*	if (this.peersUnchoked < this.maxPeers) {
-						this.peersUnchoked++;
-						peer.sendMessage(Message.unchokeMessage());
-						peer.remoteChoked = false;
-					} else {
-						peer.sendMessage(Message.chokeMessage());
-						peer.remoteChoked = true;
-					}*/
-					break;
-				case 3: // Received uninterested
-					// Update internal state
-					peer.remoteInterested = false;
-					peer.sendMessage(Message.keepAliveMessage());
-					break;
-				case 4: // Received have
-					if (peer.getBitfield() == null) {
-						peer.allocateBitfield(this.totalPieces);
-					}
-					index = msg.getPayload()[0];
-					peer.setBitfieldBit(index);
-					peer.sendMessage(Message.interestedMessage());
-					//peer.sendMessage(Message.requestMessage(index, 0, 16384));
-
-					/*peer.setLocalInterested(this.amInterested(peer));
-					if (!peer.localChoked && peer.localInterested) {
-						peer.sendMessage(Message.interestedMessage());
-						peer.localInterested = true;
-					} else {
-						peer.sendMessage(Message.keepAliveMessage());
-					}*/
-					break;
-				case 5: // Received Bitfield
-					peer.setBitfield(msg.getPayload()); //bitfield
-					peer.sendMessage(Message.interestedMessage());
-					peer.setLocalInterested(true); //this.amInterested(peer)
-					/*if (!peer.localChoked && peer.localInterested) {
-						peer.sendMessage(Message.interestedMessage());
-					} else if (peer.localInterested) {
-						peer.sendMessage(Message.interestedMessage());
-					} else {
-						peer.sendMessage(Message.keepAliveMessage());
-					}*/
-					break;
+				serverSocket = new ServerSocket(Request.port);
+				logger.info("PeerListener is waiting for connections.");
 				
-				case 6: // Received request
-					 index = msg.getPayload()[0];
-					 offset = msg.getPayload()[1];
-					 length = msg.getPayload()[2];
-					// Check that we have the piece
-					if (Utility.isSetBit(this.bitfield,	index)) {
-						// Send the block
-						block = new byte[msg.getPayload()[2]];
-						System.arraycopy(Utility.getFileInBytes(this.outFile),offset, block, 0,length);
-
-						peer.sendMessage(Message.pieceMessage(index, offset, block));
-					} else {
-						// Peer is misbehaving, choke
-						peer.sendMessage(Message.chokeMessage());
-					}
-
-					break;
-				case 7: // Received Piece message
-					index = msg.getPayload()[0];
-					offset = msg.getPayload()[1];
-					block = new byte[msg.getPayload().length -2];
-					
-					for(int i = 2; i < msg.getPayload().length; i++){
-						block[i-2] = msg.getPayload()[i];
-					}
-					// Updated downloaded
-					this.downloaded += block.length;
-
-					// Verify piece
-					if (this.verifyPiece(index,	block)) {
-						// Write piece
-						System.out.println("Writing piece [pieceIndex=" + index + "] to file");
-
-						this.outFile.seek(index * this.piece_length);
-						this.outFile.write(block);
-						this.setBitfieldBit(index);
-
-						// Recalculate amount left to download
-						this.left = this.left - block.length;
-						// For some reason left can go below 0...
-						if (this.left < 0) {
-							this.left = 0;
-						}
-
-						// Notify peers that the piece is complete
-						this.announceHave(index);
-					} else {
-						// Drop piece
-						this.resetBitfieldBit(index);
-					}
-
-
-					if (!peer.localChoked && peer.localInterested) {
-						System.out.println("Should do something");
-						//this.chooseAndRequestPiece(peer);
-					} else {
-						peer.sendMessage(Message.keepAliveMessage());
-					}
-					break;
-				default:
-					System.err.println("Error: Peer message's ID could not be identified.");
+				while (true) {
+					peerSocket = serverSocket.accept();
+					newPeer(peerSocket);
 				}
-			} catch (Exception e) {
-				// TODO Auto-generated catch block
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 		
-	}
-	
-	
-	private ArrayList<Piece> generatePieces() {
-		ArrayList<Piece> piece_array = new ArrayList<Piece>();
-		int total = this.torr_info.file_length;
-		for (int i = 0; i < this.torr_info.piece_hashes.length; i++) {
-			piece_array.add(new Piece(i, Math.min(total, this.torr_info.piece_length)));
-			total -= this.torr_info.piece_length;
+		public void newPeer(Socket socket) {
+			
+			Peer peer = new Peer(null, socket.getInetAddress().getHostAddress(), socket.getPort(), RUBTClient.this);
+			new Thread(peer).start();
 		}
-		//this.piecesHad = new BitSet(al.size());
-		return piece_array;
 	}
 	
-	private Piece choosePiece(Peer pr) {
-		int[] pieceRanks = new int[this.totalPieces];
-
-		for(Piece piece : this.piece_arr) {
-			if (piece.getState() == Piece.PieceState.INCOMPLETE && pr.canGetPiece(piece.getIndex())) {
-				pieceRanks[piece.getIndex()] = 0;
-			} else {
-				pieceRanks[piece.getIndex()] = -1;
+	
+	/**
+	 * This class reads input from the user
+	 * TODO fix this
+	 * 
+	 */
+	class InputReader extends Thread{
+		
+		public InputReader () {
+			
+		}
+		
+		public void run() {
+			BufferedReader inputReader = new BufferedReader(new InputStreamReader(System.in));
+			String str;
+			
+			try {
+				str = inputReader.readLine().toLowerCase();
+				while (true) {
+					if (str.equals("q") || str.equals("quit")) break;
+					if (str.equals("stop")) pause();
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
-		}
-
-		for (Peer peer : this.peers) {
-			for (Piece piece : this.piece_arr) {
-				if (peer.canGetPiece(piece.getIndex()) && pieceRanks[piece.getIndex()] != -1) {
-					pieceRanks[piece.getIndex()]++;
+			
+			for (Peer peer : RUBTClient.this.peers) {
+				if (peer.socket != null) {
+					peer.shutdown();
+					RUBTClient.this.RUN = false;
+					try {
+						Thread.sleep(300);
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+					System.exit(1);
 				}
 			}
 		}
-
-		int leastPieceIndex = -1, leastPieceValue = -1;
-
-		for (int i = 0; i < pieceRanks.length; i++) {
-			if (leastPieceIndex == -1 && pieceRanks[i] != -1) {
-				leastPieceIndex = i;
-				leastPieceValue = pieceRanks[i];
-			}
-			else if (leastPieceValue != -1 && leastPieceValue > pieceRanks[i] && pieceRanks[i] != -1) {
-				leastPieceIndex = i;
-				leastPieceValue = pieceRanks[i];
-			}
+		
+		
+		
+		public void pause() {
+			new Request(RUBTClient.this, "stopped");
 		}
-		if (leastPieceIndex == -1)
-			return null;
-
-		return this.piece_arr.get(leastPieceIndex);
 	}
-	
-	
-	private void announceHave(int index) {
-		for(Peer p : this.peers){
-			try{
-				p.sendMessage(Message.haveMessage(index));
-			}
-			catch(Exception e){
-				System.out.println(e);
-			}
-		}
-		
-	}
-
-	public static void main(String[] args) throws FileNotFoundException, BencodingException {
-		File torrent_file = null;
-		File output_file = null;
-		TorrentInfo torr = null;
-		Socket tracker_sock = null;
-		String announceURL = "";
-		String client_peer_id = "";
-		//Check if number of arguments are correct
-		if(args.length != 2){
-			System.err.println("Invalid number of arguments.");
-			return;
-		}
-	
-		try{
-			torrent_file = new File(args[0]);
-			output_file = new File(args[1]);
-		}
-		catch (NullPointerException e){
-			System.err.println(e);
-			return;
-		}
-		
-		// gets torrentinfo obj torr 
-		torr = getTorrentInfo(torrent_file);
-		//generate a random client id
-		client_peer_id = Peer.Generate_RandomID();
-		// get announce url
-		announceURL = torr.announce_url.toExternalForm();
-		
-		RUBTClient client = null; 
-		Tracker track = new Tracker(tracker_sock, null, torr);
-		try {
-			RandomAccessFile file = new RandomAccessFile(output_file,"rw");
-
-			/* The File exists */
-			client = new RUBTClient(torr, track, file, client_peer_id);
-			client.outFile = file;
-
-		} catch (FileNotFoundException e) {
-			/* The File does not exist */
-			client = new RUBTClient(torr, track, null, client_peer_id);
-		}
-		// sets up connection to tracker and sends http get request
-		URL trackerURL = track.create_url(torr, announceURL, client_peer_id, 0, 0, client.left, "started");	
-		if(trackerURL == null){
-			System.err.println("Error creating tracker url");
-			System.exit(1);
-		}
-		track.tracker_url = trackerURL;
-		
-		ArrayList<Peer> rubt_peers = track.send_get_tracker(client);  //returns rubt peers
-		if(rubt_peers == null){
-			System.err.println("ERROR: RUBT peers list is empty");
-			System.exit(1);
-		}
-		
-		System.out.println("rubt-peer ip and ids");
-		//debug
-		for(Peer peer : rubt_peers){
-			System.out.println(peer.ip + " : " + peer.peer_id);
-		}	
-		
-		client.totalPieces = torr.piece_hashes.length;
-		// Opens a connection with the RUBT peer(s) 
-		Peer.connect_peers(rubt_peers, torr);
-		
-		client.start();		
-
-	}
-		
-	
-
-	public static TorrentInfo getTorrentInfo(File torr_file){
-		FileInputStream file_stream = null;
-		TorrentInfo torr_info = null;
-		byte [] buff = new byte[(int) torr_file.length()];
-		
-		try{
-			file_stream = new FileInputStream(torr_file);
-		} catch (FileNotFoundException e) 
-		{
-			System.err.println("ERROR: The torrent file was not found");
-			System.exit(1);
-		}
-		
-		
-		try{
-			file_stream.read(buff, 0, buff.length);
-		} catch (IOException e) {
-			System.err.println("Error reading the torrent file");
-			System.exit(1);
-		}
-		
-		try{
-			torr_info = new TorrentInfo(buff);
-		} catch (Exception e) {
-			System.err.println("Error loading torrent file into torrent file object");
-			System.exit(1);
-		}
-		
-		try{
-			file_stream.close();
-		} catch (IOException e) {
-			System.err.println(e);
-		}
-		
-		return torr_info;
-	}
-	
-	
-	
-	/* Converts byte array to hex string */
-	public static String toHexString(byte[] bytes) {
-		if (bytes == null) {
-			return null;
-		}
-
-		if (bytes.length == 0) {
-			return "";
-		}
-
-		StringBuilder HexOutput = new StringBuilder(bytes.length * 3);
-		for(int i=0; i < bytes.length; i++){
-			HexOutput.append('%').append(HEX_CHARS[(byte) (bytes[i] >> 4)& 0x0f]).append(HEX_CHARS[(byte) (bytes[i] & 0x0f)]);
-		}
-		
-		return HexOutput.toString();
-	}
-
-	
-	public void recvMessage(Message msg){
-		this.messages.add(msg);
-	}
-	
-		
-	}
-	
+}
