@@ -124,7 +124,8 @@ public class RUBTClient extends JFrame implements Runnable{
 	static int announceTimerInterval = 180;
 	
 	/**
-	 *  The number of active peers.
+	 *  The number of active peers. This value is changed after handshakes are sent and received. Also after peers are disconnected
+	 *  via the shutdown method.
 	 */
 	volatile int numOfActivePeers = 0;
 	
@@ -150,19 +151,14 @@ public class RUBTClient extends JFrame implements Runnable{
 	final int MAX_DOWNLOAD_LIMIT = 10000;
 	
 	/**
-	 *  Time in milliseconds the client should wait before restarting the connection with a peer.
-	 */
-	final int RESTART_INTERVAL = 60000;
-	
-	/**
 	 *  Amount of times a client should try to connect to a peer before giving up on the peer.
 	 */
 	final int MAX_CONNECTION_ATTEMPTS = 3;
 	
 	/**
-	 *  List of peers that the client shouldn't connect to, because previous connection attempts have ended in failure.
+	 *  List of IPs of peers that the client shouldn't connect to, because previous connection attempts have ended in failure.
 	 */
-	ArrayList<Peer> bad_peers;
+	ArrayList<String> bad_peers;
 	
 	/**
 	 *  Maximum number of connections allowed.
@@ -293,25 +289,46 @@ public class RUBTClient extends JFrame implements Runnable{
 		TimerTask timerTask = new TimerTask() {
 			@Override
 			public void run() {
-				logger.info("Regular announcement sent to tracker.");
+				
+				/* I left "RUBTClient.this" in front of the relevant variables for clarity. */
+				
+				// Send the regular announcement
 				new Request(RUBTClient.this, "");
+				logger.info("Regular announcement sent to tracker.");
+				
+				// Update the tracker announce interval if need be
 				if (RUBTClient.this.response2 != null) //sanity check
 					RUBTClient.announceTimerInterval = 
 						(RUBTClient.this.response2.interval > 180) ? 180 : RUBTClient.this.response2.interval;
+				
+				// Parse the tracker response and add in new peers
 				ArrayList<Map<ByteBuffer, Object>> peer_map = RUBTClient.this.response2.get_peer_map();
 		        ArrayList<Peer> peers = MyTools.createPeerList(RUBTClient.this, peer_map);
 		        for (Peer peer : peers) {
-		        	if (RUBTClient.this.numOfActivePeers < MAX_CONNECTIONS && !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp)) {
+		        	if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS 
+		        			&& !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp) 
+		        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
 		        		RUBTClient.this.cur_peer_interactions.add(peer.peerIp);
+		        		RUBTClient.this.peers.add(peer);
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 		    			peer.start();
-		    		} else
-		    			logger.info("Unable to connect with Peer ID : [ " + peer.peerId + " ]. Maximum number of connections reached.");
+		        	}
 		        }
-				
+		        
+		        // Look at the old peers and see if any of them deserve a chance to be connected to, again
+		        for (Peer peer : RUBTClient.this.peers) {
+		        	if (peer.connectionAttempts < RUBTClient.this.MAX_CONNECTION_ATTEMPTS 
+		        			&& !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp)
+		        			// In case I add something later on that puts peers in bad_peers even when connectionAttempts < MAX_CONNECTION_ATTEMPTS
+		        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
+		        		RUBTClient.this.cur_peer_interactions.add(peer.peerIp);
+		        		System.out.println("Starting NEW thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
+		    			peer.start();
+		        	}
+		        }
 			}
 		};
-		timer.schedule(timerTask, 60*1000, RUBTClient.announceTimerInterval * 1000);
+		timer.schedule(timerTask, RUBTClient.announceTimerInterval*1000, RUBTClient.announceTimerInterval*1000);
 		
 		int downloaded = this.bytesDownloaded;
 		System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
