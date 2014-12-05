@@ -99,32 +99,33 @@ public class Message {
 	public static void dealWithMessage(Peer peer, DataInputStream dis) throws IOException {
 		logger.info("Reading message from peer : " + peer.peerId);
 		int length = dis.readInt();
-		if (length < 1 || length > 131081) return;
+		if (length == 0) {
+			logger.info("Received {KEEP_ALIVE} message from Peer ID : [ " + peer.peerId + " ].");
+			return;
+		}
+		if (length < 0 || length > 131081) return; // Got the 131081 from the Message.java class that was uploaded in Sakai. I also
+		// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
 		byte[] bite = new byte[1]; //using byte array here because for some reason doesn't work well if using readByte()
 		int piece_index, block_offset, block_length, piece_length = peer.client.torrentInfo.piece_length;
 		byte[] block;
 		try {
 			dis.read(bite);
+			logger.info("Received {" + Peer.message_types[bite[0] + 1] +"} message from Peer ID : [ " + peer.peerId + " ].");
 			switch (bite[0]) {
 				case 0:
-					logger.info("Received {CHOKE} message from Peer: (" + peer.peerId + ").");
 					peer.peerChoking = true;
 					MyTools.saveDownloadedPieces(peer.client);
 					break;
 				case 1:
-					logger.info("Received {UNCHOKE} message from Peer: (" + peer.peerId + ").");
 					peer.peerChoking = false;
 					break;
 				case 2:
-					logger.info("Received {INTERESTED} message from Peer: (" + peer.peerId + ").");
 					peer.peerInterested = true;
 					break;
 				case 3:
-					logger.info("Received {NOT_INTERESTED} message from Peer: (" + peer.peerId + ").");
 					peer.peerInterested = false;
 					break;
 				case 4:
-					logger.info("Received {HAVE} message from Peer: (" + peer.peerId + ").");
 					//Message is a have message
 					if (!peer.sentGreetings) {
 			        	peer.sendMessage(Message.createUnchoke());
@@ -144,7 +145,6 @@ public class Message {
 					}
 					break;
 				case 5:
-					logger.info("Received {BITFIELD} message from Peer: (" + peer.peerId + ").");
 					//Message is a bitfield message (and therefore the peer is not a bad torrent controller)
 					peer.badTorrentController = false;
 					//Send unchoke and interested
@@ -167,7 +167,6 @@ public class Message {
 					peer.sizeOfBytefield = count;
 					break;
 				case 6:
-					logger.info("Received {REQUEST} message from Peer: (" + peer.peerId + ").");
 					//Message is a request message (if have it, send it)
 					piece_index = dis.readInt();
 					block_offset = dis.readInt();
@@ -182,7 +181,6 @@ public class Message {
 					}
 					break;
 				case 7:
-					logger.info("Received {PIECE} message from Peer: (" + peer.peerId + ").");
 					//Message is a piece message
 					piece_index = dis.readInt();
 					block_offset = dis.readInt();
@@ -212,7 +210,6 @@ public class Message {
 					}
 					break;
 				case 8:
-					logger.info("Received {CANCEL} message from Peer: (" + peer.peerId + ").");
 					// Message is a cancel message
 					piece_index = dis.readInt();
 					block_offset = dis.readInt();
