@@ -21,6 +21,10 @@ public class Message {
 	int[] intPayload = null;
 	byte[] bytePayload = null;
 	
+	private static final String[] message_types = {
+		"CHOKE", "UNCHOKE", "INTERESTED", "NOT_INTERESTED",
+		"HAVE", "BITFIELD", "REQUEST", "PIECE", "CANCEL"
+	};
 	
 	/**
 	 * Constructor for keep-alive, choke, unchoke, interested, and uninterested messages.
@@ -111,7 +115,7 @@ public class Message {
 		byte[] block;
 		try {
 			dis.read(bite);
-			logger.info("Received {" + Peer.message_types[bite[0] + 1] +"} message from Peer ID : [ " + peer.peerId + " ].");
+			logger.info("Received {" + message_types[bite[0] + 1] +"} message from Peer ID : [ " + peer.peerId + " ].");
 			switch (bite[0]) {
 				case 0:
 					peer.peerChoking = true;
