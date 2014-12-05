@@ -1,4 +1,6 @@
-
+/*
+ * @author Gurpreet Pannu, Michael Norris, Priyam Patel
+ */
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -22,7 +24,7 @@ public class Peer extends Thread{
 	private static final Logger logger = Logger.getLogger(Peer.class.getName());
 	
 	private static final String[] message_types = {
-		"CHOKE", "UNCHOKE", "INTERESTED", "NOT_INTERESTED",
+		"KEEP_ALIVE", "CHOKE", "UNCHOKE", "INTERESTED", "NOT_INTERESTED",
 		"HAVE", "BITFIELD", "REQUEST", "PIECE", "CANCEL"
 	};
 	
@@ -137,17 +139,42 @@ public class Peer extends Thread{
 	/**
 	 *  For sending keep_alives to the peer. The time (in milliseconds) when the last message was sent.
 	 */
-	long clientKeepAlive;
+	long clientLastMessage;
 	
 	/**
 	 *  For keeping a connection alive with a peer. The time (in milliseconds) when the last message was received.
 	 */
-	long peerKeepAlive;
+	long peerLastMessage;
 	
 	/**
 	 *  The interval (in milliseconds) in which a message needs to be communicated to a peer to keep the connection alive.
 	 */
 	final long MAX_KEEPALIVE_INTERVAL = 110000;
+	
+	/**
+	 *  The amount of bytes sent since the last interval. Reset every interval of 100 milliseconds.
+	 */
+	int bytes_sent = 0;
+	
+	/**
+	 *  The amount of bytes received since the last interval. Reset every interval of 100 milliseconds.
+	 */
+	int bytes_received = 0;
+	
+	/**
+	 *  The interval in which the max bytes sent can be UPLOAD_LIMIT and the max bytes downloaded can be DOWNLOAD_LIMIT.
+	 */
+	final long MAX_THROTTLE_INTERVAL = 100;
+	
+	/**
+	 *  If the peer is currently connected to, and exchanging messages with, the client.
+	 */
+	boolean isActive = false;
+	
+	/**
+	 *  Number of times the client has tried to connect to this peer.
+	 */
+	int connectionAttempts = 0;
 	
 	/**
 	 *  True while there are no problems in working with the peer.
@@ -201,9 +228,9 @@ public class Peer extends Thread{
 	        // If restarting a connection...
 	       	if (this.socket == null) this.connect();
 			
-		logger.info("Started exchanging messages with peer: (" + this.peerId + ").");
+	       	logger.info("Started exchanging messages with peer: (" + this.peerId + ").");
 			
-		// Send bitfield
+	       	// Send bitfield
 	        if (!this.sentBitfield && this.clientBitfield != null) {
 	        	System.out.println("sending bitfield");
 	        	this.sendMessage(this.clientBitfield);
@@ -250,16 +277,16 @@ public class Peer extends Thread{
 			}
 	
 			// Send keep_alive if needed
-			if (System.currentTimeMillis() - this.clientKeepAlive > MAX_KEEPALIVE_INTERVAL) {
+			if (System.currentTimeMillis() - this.clientLastMessage > MAX_KEEPALIVE_INTERVAL) {
 				if (this.amInterested) {
 					this.sendMessage(Message.createKeepAlive());
-					this.clientKeepAlive = System.currentTimeMillis();
-					this.peerKeepAlive = System.currentTimeMillis();
+					this.clientLastMessage = System.currentTimeMillis();
+					this.peerLastMessage = System.currentTimeMillis();
 				}
 			}
 			
 			// Check if the peer wants to keep the connection open
-			if (System.currentTimeMillis() - this.peerKeepAlive > MAX_KEEPALIVE_INTERVAL + 25000) {
+			if (System.currentTimeMillis() - this.peerLastMessage > MAX_KEEPALIVE_INTERVAL + 25000) {
 				this.shutdown();
 			}
 	        }
@@ -288,6 +315,9 @@ public class Peer extends Thread{
 	        	this.sendHandshake();
 	        	this.receiveHandshake();
 	        }
+	        this.isActive = true;
+	        this.client.cur_peer_interactions.add(this.peerIp);
+	        this.client.numOfActivePeers++;
 		} catch (ConnectException e) {
 			logger.info("Unsuccessful connection with Peer " 
 					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
@@ -321,7 +351,7 @@ public class Peer extends Thread{
 		} catch (IOException e) {
 			logger.info("Unable to disconnect from Peer "
 					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
-					+ " ].");
+					+ " ]. May have already been disconnected.");
 			System.err.println(e);
 		}
 	}
@@ -331,6 +361,18 @@ public class Peer extends Thread{
 	 *  Closes the connection with a peer and ends the thread.
 	 */
 	public void shutdown() {
+		// This check was put here in case a peer gets to this method before handshakes are finished being sent and received.
+		if (this.isActive) {
+			
+			this.connectionAttempts++;
+			// In case MAX_CONNECTION_ATTEMPTS was accidentally set to unreasonable value, >= is needed
+			if (this.connectionAttempts >= this.client.MAX_CONNECTION_ATTEMPTS)
+				this.client.bad_peers.add(this.peerId);
+			
+			this.isActive = false;
+			this.client.cur_peer_interactions.remove(this.peerIp);
+			this.client.numOfActivePeers--;
+		}
 		this.disconnect();
 		this.RUN = false;
 	}
@@ -368,7 +410,7 @@ public class Peer extends Thread{
 		} catch (IOException e) {
 	        logger.info("A problem occurred while trying to send the handshake message to Peer ID : [ " + this.peerId + " ].");
 			System.err.println(e);
-			this.disconnect();
+			this.shutdown();
 		}
 	}
 	
@@ -410,20 +452,15 @@ public class Peer extends Thread{
 	 * @param message -> the message that will be sent
 	 */
 	public void sendMessage(Message message) {
-		this.clientKeepAlive = System.currentTimeMillis();
+		this.clientLastMessage = System.currentTimeMillis();
 		if (this.socket.isClosed()) {
-			logger.info("Could not send {" + message_types[message.message_id]
+			logger.info("Could not send {" + message_types[message.message_id + 1]
 					+ "} message to Peer ID : [ " + this.peerId + " ]. Socket is closed.");
 			return;
 		}
-		if (message.message_id != -1)
-			logger.info("Sending {" + message_types[message.message_id] + "} message to Peer " 
-					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
-					+ " ].");
-		else
-			logger.info("Sending {KEEP_ALIVE} message to Peer " 
-					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
-					+ " ].");
+		logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " 
+				+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
+				+ " ].");
 		try {
 			this.socketOutput.writeInt(message.length_prefix);
 			if (message.message_id != (byte) -1) {
@@ -445,13 +482,7 @@ public class Peer extends Thread{
 		} catch (IOException e) {
 			System.out.println(e.toString());
 			logger.info("A problem occurrred while trying to send a {" + message.message_id + "} message to peer: [ " + this.peerId + " ].");
-			this.disconnect();
-			try {
-				Thread.sleep(5000);
-			} catch (InterruptedException e1) {
-				e1.printStackTrace();
-			}
-			this.connect();
+			this.shutdown();
 		}
 	}
 }
