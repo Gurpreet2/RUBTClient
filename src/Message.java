@@ -283,6 +283,23 @@ public class Message {
 		return true;
 	}
 	
+	// Working handshake verification TODO: Remove original method, rename this one
+	public static boolean verifyHandshake2(byte[] msg_to_peer, byte[] peer_response){
+		if(msg_to_peer.length!=68 || peer_response.length != 68){
+			System.err.println("Incorrect length of response!");
+			return false;
+		}
+		
+		byte[] sent_infoHash = Arrays.copyOfRange(msg_to_peer, 28, 47);
+		byte[] received_infoHash = Arrays.copyOfRange(peer_response, 28, 47);
+		if (Arrays.equals(sent_infoHash, received_infoHash)) {
+			return true;
+		}
+		else{
+			return false;
+		}
+	}
+	
 	
 	/**
 	 * Create a keep-alive message.
