@@ -97,6 +97,7 @@ public class Message {
 	 * @throws IOException 
 	 */
 	public static void dealWithMessage(Peer peer, DataInputStream dis) throws IOException {
+		peer.peerKeepAlive = System.currentTimeMillis();
 		logger.info("Reading message from peer : " + peer.peerId);
 		int length = dis.readInt();
 		if (length == 0) {
@@ -252,10 +253,19 @@ public class Message {
 	public static boolean verifyHandshake(Peer peer, byte[] handshake) {
 		// TODO always returns false...
 		if (handshake[0] != (byte) 19) return false;
-		if (!(new String(Arrays.copyOfRange(handshake, 1, 20)).equals("BitTorrent Protocol"))) return false;
-		if (!(new String(Arrays.copyOfRange(handshake, 20, 28)).equals(new String(new byte[8])))) return false;
+		byte[] verifyAgainst = "BitTorrent Protocol".getBytes();
+		for (int i = 1; i < 20; i++) {
+			if (handshake[i] != verifyAgainst[i-1])
+				return false;
+		}
+		verifyAgainst = new byte[8];
+		for (int i = 20; i < 28; i++) {
+			if (handshake[i] != verifyAgainst[i-20])
+				return false;
+		}
 		for (int i = 28; i < 48; i++) {
-			if (handshake[i] != peer.infoHash[i-28]) return false;
+			if (handshake[i] != peer.infoHash[i-28])
+				return false;
 		}
 		return true;
 	}
