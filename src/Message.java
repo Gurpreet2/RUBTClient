@@ -1,4 +1,6 @@
-
+/*
+ * @author Gurpreet Pannu, Michael Norris, Priyam Patel
+ */
 
 import java.io.DataInputStream;
 import java.io.EOFException;
@@ -109,7 +111,7 @@ public class Message {
 		// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
 		
 		// Peer sent a seemingly valid message so reset the peer timer (to keep the connection from timing out)
-		peer.peerKeepAlive = System.currentTimeMillis();
+		peer.peerLastMessage = System.currentTimeMillis();
 		
 		// Message is just a keep_alive message
 		if (length == 0) {
@@ -363,6 +365,8 @@ public class Message {
 	 */
 	public static Message createBitfield(RUBTClient client) {
 		if (client.havePieces == null) return null;
+		boolean clientHasOneOrMorePiece = false; // Because I can
+		
 		// If the number of pieces is divisible by 8, make an array of size numOfPieces/8, else make one of size numOfPieces/8 + 1
 		byte[] bitfield = 
 				new byte[((double)client.numOfPieces)/8 == (double)(client.numOfPieces/8) ?
@@ -370,9 +374,13 @@ public class Message {
 		for (int i = 0; i < client.numOfPieces; i++) {
 			if (client.havePieces[i]) {
 				MyTools.setBit(bitfield, i);
+				clientHasOneOrMorePiece = true;
 			}
 		}
-		return new Message(bitfield.length + 1, (byte) 5, bitfield);
+		if (clientHasOneOrMorePiece) 
+			return new Message(bitfield.length + 1, (byte) 5, bitfield);
+		else
+			return null;
 	}
 	
 	
