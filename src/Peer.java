@@ -382,8 +382,7 @@ public class Peer extends Thread{
         byte[] handshakeBytes = new byte[68];
         try {
 			this.socketInput.read(handshakeBytes);
-			System.out.println("HANDSHAKE RECV: " + Arrays.toString(handshakeBytes));
-			//if (Message.verifyHandshake(this, Arrays.copyOfRange(handshakeBytes, 0, 48))) // TODO always returns false...
+			//if (Message.verifyHandshake(this, Arrays.copyOfRange(handshakeBytes, 0, 48))) // TODO remove this line after renaming the fixed method
 			if (Message.verifyHandshake2(this.handshakeMessage, handshakeBytes))
 				logger.info("The handshake response from Peer "
 						+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
