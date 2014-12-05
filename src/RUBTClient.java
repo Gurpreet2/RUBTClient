@@ -126,6 +126,27 @@ public class RUBTClient extends JFrame implements Runnable{
 	 *  The number of active peers.
 	 */
 	volatile int numActivePeers = 0;
+	
+	/**
+	 *  Number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 *  (MAX_THROTTLE_INTERVAL is in Peer.java...)
+	 */
+	volatile int UPLOAD_LIMIT;
+	
+	/**
+	 *  Maximum number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL.
+	 */
+	int MAX_UPLOAD_LIMIT = 10000;
+	
+	/**
+	 *  Number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 */
+	volatile int DOWNLOAD_LIMIT;
+	
+	/**
+	 *  Maximum number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL.
+	 */
+	int MAX_DOWNLOAD_LIMIT = 10000;
 
 	/**
 	 *  Value that is true while file is downloading, false when file finishes downloading.
@@ -254,6 +275,10 @@ public class RUBTClient extends JFrame implements Runnable{
 		int downloaded = this.bytesDownloaded;
 		System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
 		while(this.RUN) {
+		
+			// Set the upload and download limits for each peer
+			this.UPLOAD_LIMIT = this.MAX_UPLOAD_LIMIT / this.numActivePeers;
+			this.DOWNLOAD_LIMIT = this.MAX_DOWNLOAD_LIMIT / this.numActivePeers;
 			
 			// Prints how far along the download is, whenever the download progresses.
 			if (downloaded != this.bytesDownloaded) {
