@@ -1,3 +1,7 @@
+/*
+ * @author Gurpreet Pannu, Priyam Patel, Michael Norris
+ */
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -136,7 +140,7 @@ public class MyTools {
 	/**
 	 *  If the client was shut down and restarted, this method will refill the rawFileBytes with the bytes from the download file
 	 *  if it exists. To ensure that the rawFileBytes are correctly brought in from the file, piece hashes are created from their
-	 *  pieces and checked against the hashes of 
+	 *  pieces and checked against the hashes in the piece_hashes array in torrentInfo
 	 */
 	public static boolean setDownloadedBytes(RUBTClient client) {
         File file = new File(RUBTClient.downloadFile);
