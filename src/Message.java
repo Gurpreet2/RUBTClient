@@ -101,19 +101,28 @@ public class Message {
 	 * @throws IOException 
 	 */
 	public static void dealWithMessage(Peer peer, DataInputStream dis) throws IOException {
-		peer.peerKeepAlive = System.currentTimeMillis();
 		logger.info("Reading message from peer : " + peer.peerId);
+		
+		// Read the amount of bytes incoming
 		int length = dis.readInt();
+		if (length < 0 || length > 131081) return; // Got the 131081 from the Message.java class that was uploaded in Sakai. I also
+		// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
+		
+		// Peer sent a seemingly valid message so reset the peer timer (to keep the connection from timing out)
+		peer.peerKeepAlive = System.currentTimeMillis();
+		
+		// Message is just a keep_alive message
 		if (length == 0) {
 			logger.info("Received {KEEP_ALIVE} message from Peer ID : [ " + peer.peerId + " ].");
 			return;
 		}
-		if (length < 0 || length > 131081) return; // Got the 131081 from the Message.java class that was uploaded in Sakai. I also
-		// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
+		
+		// Message is not a keep alive message, get prepared for it
 		byte[] bite = new byte[1]; //using byte array here because for some reason doesn't work well if using readByte()
 		int piece_index, block_offset, block_length, piece_length = peer.client.torrentInfo.piece_length;
 		byte[] block;
 		try {
+			// Read the first byte in the message and deal with the message appropriately
 			dis.read(bite);
 			logger.info("Received {" + message_types[bite[0] + 1] +"} message from Peer ID : [ " + peer.peerId + " ].");
 			switch (bite[0]) {
