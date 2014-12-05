@@ -265,28 +265,8 @@ public class Message {
 	 * @param peer_id -> The peer id that should be in the handshake method
 	 * @return -> True if the peer id matches with the one in the message
 	 */
-	public static boolean verifyHandshake(Peer peer, byte[] handshake) {
-		// TODO always returns false...
-		if (handshake[0] != (byte) 19) return false;
-		byte[] verifyAgainst = "BitTorrent Protocol".getBytes();
-		for (int i = 1; i < 20; i++) {
-			if (handshake[i] != verifyAgainst[i-1])
-				return false;
-		}
-		verifyAgainst = new byte[8];
-		for (int i = 20; i < 28; i++) {
-			if (handshake[i] != verifyAgainst[i-20])
-				return false;
-		}
-		for (int i = 28; i < 48; i++) {
-			if (handshake[i] != peer.infoHash[i-28])
-				return false;
-		}
-		return true;
-	}
 	
-	// Working handshake verification TODO: Remove original method, rename this one
-	public static boolean verifyHandshake2(byte[] msg_to_peer, byte[] peer_response){
+	public static boolean verifyHandshake(byte[] msg_to_peer, byte[] peer_response){
 		if(msg_to_peer.length!=68 || peer_response.length != 68){
 			System.err.println("Incorrect length of response!");
 			return false;

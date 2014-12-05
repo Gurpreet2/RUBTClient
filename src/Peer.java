@@ -232,7 +232,7 @@ public class Peer extends Thread{
         	
 	        // If starting a new connection or restarting a connection...
 	       	if (this.socket == null) this.connect();
-	       	if (this.socket != null) logger.info("Started exchanging messages with Peer ID : [ " + this.peerId + " ].");
+	       	//if (this.socket != null) logger.info("Started exchanging messages with Peer ID : [ " + this.peerId + " ].");
 			
 	       	// Send bitfield
 	        if (!this.sentBitfield && this.clientBitfield != null) {
@@ -376,7 +376,7 @@ public class Peer extends Thread{
 		try {
 			ByteBuffer byteBuffer = ByteBuffer.wrap(handshakeMessage);
 			byteBuffer.put((byte) 19);
-			byteBuffer.put("BitTorrent Protocol".getBytes());
+			byteBuffer.put("BitTorrent protocol".getBytes());
 			byteBuffer.put(new byte[8]);
 			byteBuffer.put(this.infoHash);
 			byteBuffer.put(this.client.clientId.getBytes());
@@ -394,6 +394,7 @@ public class Peer extends Thread{
 		//Send your handshake
 		try {
 			this.socketOutput.write(this.handshakeMessage);
+			System.out.println("Sent: " + Arrays.toString(this.handshakeMessage));
 			this.socketOutput.flush();
 			this.sentHandshake = true;
 	        logger.info("Handshake message was sent to Peer ID : [ " + this.peerId + " ].");
@@ -414,8 +415,9 @@ public class Peer extends Thread{
         byte[] handshakeBytes = new byte[68];
         try {
 			this.socketInput.read(handshakeBytes);
-			//if (Message.verifyHandshake(this, Arrays.copyOfRange(handshakeBytes, 0, 48))) // TODO remove this line after renaming the fixed method
-			if (Message.verifyHandshake2(this.handshakeMessage, handshakeBytes))
+			System.out.println("Recv: " + Arrays.toString(handshakeBytes));
+
+			if (Message.verifyHandshake(this.handshakeMessage, handshakeBytes))
 				logger.info("The handshake response from Peer "
 						+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
 						+ " ] was verified.");
