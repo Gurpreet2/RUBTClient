@@ -121,6 +121,11 @@ public class RUBTClient extends JFrame implements Runnable{
 	 *  Interval for sending announcements to tracker
 	 */
 	static int announceTimerInterval = 120;
+	
+	/**
+	 *  The number of active peers.
+	 */
+	volatile int numActivePeers = 0;
 
 	/**
 	 *  Value that is true while file is downloading, false when file finishes downloading.
