@@ -312,6 +312,17 @@ public class RUBTClient extends JFrame implements Runnable{
 	}
 	
 	
+	
+	/** Changes made by: Priyam Patel 
+	 *  Added method is called from GUI to update progress bar 
+	 * @returns int: percent value left to download 
+	 */
+	public int getProgressBarPercent() {
+		double fraction = ((double)this.bytesDownloaded/(double)this.torrentInfo.file_length);
+		return (int)fraction*100;
+	}
+	
+	
 	/**
 	 * This class listens for incoming connections from peers and allocates a socket for a connection.
 	 *
