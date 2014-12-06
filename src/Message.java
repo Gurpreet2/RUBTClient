@@ -103,7 +103,7 @@ public class Message {
 	 * @throws IOException 
 	 */
 	public static void dealWithMessage(Peer peer, DataInputStream dis) throws IOException {
-		logger.info("Reading message from peer : " + peer.peerId);
+		//logger.info("Reading message from peer : " + peer.peerId);
 		
 		// Read the amount of bytes incoming
 		int length = dis.readInt();

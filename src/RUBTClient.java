@@ -247,9 +247,11 @@ public class RUBTClient extends JFrame implements Runnable{
 	        // Start connecting to and messaging peers
 	        for (Peer peer : client.peers) {
 				if (client.numOfActivePeers < client.MAX_CONNECTIONS) {
-					client.cur_peer_interactions.add(peer.peerIp);
-	        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
-	    			peer.start();
+					if(peer.peerIp.startsWith("128.6.171.")){ //TODO: Allow all peers
+						client.cur_peer_interactions.add(peer.peerIp);
+		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
+		    			peer.start();
+					}
 	    		} else
 	    			logger.info("Unable to connect with Peer ID : [ " + peer.peerId + " ]. Maximum number of connections reached.");
 	        }

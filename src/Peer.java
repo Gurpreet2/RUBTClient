@@ -395,7 +395,7 @@ public class Peer extends Thread{
 		//Send your handshake
 		try {
 			this.socketOutput.write(this.handshakeMessage);
-			System.out.println("Sent: " + Arrays.toString(this.handshakeMessage));
+			//System.out.println("Sent: " + Arrays.toString(this.handshakeMessage));
 			this.socketOutput.flush();
 			this.sentHandshake = true;
 	        logger.info("Handshake message was sent to Peer ID : [ " + this.peerId + " ].");
@@ -416,7 +416,7 @@ public class Peer extends Thread{
         byte[] handshakeBytes = new byte[68];
         try {
 			this.socketInput.read(handshakeBytes);
-			System.out.println("Recv: " + Arrays.toString(handshakeBytes));
+			//System.out.println("Recv: " + Arrays.toString(handshakeBytes));
 
 			if (Message.verifyHandshake(this.handshakeMessage, handshakeBytes))
 				logger.info("The handshake response from Peer "
