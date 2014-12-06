@@ -184,7 +184,6 @@ public class Message {
 					}
 					System.out.println("Peer bitfield: " + Arrays.toString(peer.peerBytefield));
 					peer.sizeOfBytefield = count;
-					System.exit(1);
 					break;
 				case 6:
 					//Message is a request message (if have it, send it)

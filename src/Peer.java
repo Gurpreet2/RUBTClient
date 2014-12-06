@@ -331,6 +331,7 @@ public class Peer extends Thread{
 	 * This method closes a connection with a peer.
 	 */
 	public void disconnect() {
+		System.out.println("Disconnecting");
 		try {
 			if (this.socket != null) this.socket.close();
 			logger.info("Disconnected from Peer "
