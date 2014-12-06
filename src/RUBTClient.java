@@ -270,6 +270,7 @@ public class RUBTClient extends JFrame implements Runnable{
         
         // Thread start for client
         new Thread(client).start();
+        startGui(client);
         
 		if (client.onlyPeer == null) {
 			PeerListener peerListener = client.new PeerListener();
@@ -392,6 +393,18 @@ public class RUBTClient extends JFrame implements Runnable{
         MyTools.saveDownloadedPieces(this);
 	}
 	
+	
+	/**
+	 * Creates a Gui object and opens up the interface.
+	 */
+	private static void startGui(RUBTClient rc){
+		Gui gui;
+		gui = new Gui(rc);
+		gui.setSize(450,450);
+		gui.setResizable(false);
+		gui.setVisible(true);
+		gui.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	}
 	
 	
 	/** Changes made by: Priyam Patel 
