@@ -125,9 +125,11 @@ public class Message {
 		byte[] block;
 		try {
 			// Read the first byte in the message and deal with the message appropriately
-			dis.read(bite);
-			logger.info("Received {" + message_types[bite[0] + 1] +"} message from Peer ID : [ " + peer.peerId + " ].");
-			switch (bite[0]) {
+			
+			byte type = dis.readByte();
+			//System.out.println("Byte: " + type);
+			logger.info("Received {" + message_types[type] +"} message from Peer ID : [ " + peer.peerId + " ].");
+			switch (type) {
 				case 0:
 					peer.peerChoking = true;
 					MyTools.saveDownloadedPieces(peer.client);
@@ -180,7 +182,9 @@ public class Message {
 							count++;
 						}
 					}
+					System.out.println("Peer bitfield: " + Arrays.toString(peer.peerBytefield));
 					peer.sizeOfBytefield = count;
+					System.exit(1);
 					break;
 				case 6:
 					//Message is a request message (if have it, send it)
