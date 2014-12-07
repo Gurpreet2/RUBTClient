@@ -230,10 +230,12 @@ public class Peer extends Thread{
 	 */
 	public void run() {
         	
+		while(!Thread.interrupted()){
 	        // If starting a new connection or restarting a connection...
 	       	if (this.socket == null) this.connect();
 	       	//if (this.socket != null) logger.info("Started exchanging messages with Peer ID : [ " + this.peerId + " ].");
-			
+
+	       	
 	       	// Send bitfield
 	        if (!this.sentBitfield && this.clientBitfield != null) {
 	        	this.sendMessage(this.clientBitfield);
@@ -245,7 +247,7 @@ public class Peer extends Thread{
 	        	if (this.socketInput == null) this.connect();
 	        	
 				try {
-					Message.dealWithMessage(this, this.socketInput);
+					Message.dealWithMessage(this);
 				} catch (IOException e) {
 					logger.info("IO exception (in peer class) from Peer : " + this.peerId);
 					MyTools.saveDownloadedPieces(this.client);
@@ -278,6 +280,7 @@ public class Peer extends Thread{
 	        logger.info("End of thread with Peer " 
 					+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
 					+ " ].");
+		}
 	}
 	
 	
@@ -331,7 +334,7 @@ public class Peer extends Thread{
 	 * This method closes a connection with a peer.
 	 */
 	public void disconnect() {
-		System.out.println("Disconnecting");
+		System.out.println("Disconnecting from Peer ID: " + this.peerId);
 		try {
 			if (this.socket != null) this.socket.close();
 			logger.info("Disconnected from Peer "
@@ -365,6 +368,7 @@ public class Peer extends Thread{
 			this.client.numOfActivePeers--;
 		}
 		this.disconnect();
+		this.interrupt();
 		this.RUN = false;
 	}
 	
@@ -456,7 +460,8 @@ public class Peer extends Thread{
 					+ "} message to Peer ID : [ " + this.peerId + " ]. Socket is closed.");
 			shutdown();
 		}
-		logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " 
+		//logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " + ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp)) + " ].");
+		System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer " 
 				+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
 				+ " ].");
 		try {

@@ -266,6 +266,7 @@ public class RUBTClient extends JFrame implements Runnable{
         		System.err.println("Could not find an open port to connect to the peer in the range 6881 - 6890. Exiting...");
         		return;
         	}
+        	System.out.println("Added peer");
         	client.peers.add(new Peer(null, client.onlyPeer, port, client));
         }
         //client.peers.get(0).start();
@@ -312,6 +313,8 @@ public class RUBTClient extends JFrame implements Runnable{
 			        			&& !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp) 
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
 			        		RUBTClient.this.cur_peer_interactions.add(peer.peerIp);
+				        	System.out.println("Added peer");
+
 			        		RUBTClient.this.peers.add(peer);
 			        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 			    			peer.start();
@@ -342,14 +345,19 @@ public class RUBTClient extends JFrame implements Runnable{
 			for (Peer peer : this.peers) {
 				if (peer.clientLastMessage + peer.MAX_KEEPALIVE_INTERVAL > System.currentTimeMillis())
 					if (peer.amInterested) {
-						peer.sendMessage(Message.createKeepAlive());
+						//peer.sendMessage(Message.createKeepAlive());
 						peer.clientLastMessage = System.currentTimeMillis();
 						peer.peerLastMessage = System.currentTimeMillis();
 					}
 			
 				// Check if the peer wants to keep the connection open
 				if (peer.peerLastMessage + peer.MAX_KEEPALIVE_INTERVAL + 25000> System.currentTimeMillis()) {
-					peer.shutdown();
+					//peer.shutdown();
+				}
+				if(peer.isActive == false){
+		        	//System.out.println("Removed peer");
+		        	//peer.interrupt();
+					//this.peers.remove(peer);
 				}
 			}
 			
@@ -449,9 +457,9 @@ public class RUBTClient extends JFrame implements Runnable{
 		public void newPeer(Socket socket) {
 			
 			Peer peer = new Peer(null, socket.getInetAddress().getHostAddress(), socket.getPort(), RUBTClient.this);
-			RUBTClient.this.peers.add(peer);
-			if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS)
-				peer.start();
+			//RUBTClient.this.peers.add(peer);
+			//if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS)
+				//peer.start();
 		}
 	}
 	

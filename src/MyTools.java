@@ -189,7 +189,8 @@ public class MyTools {
 			System.err.println("There was an error trying to put the downloaded bytes into the download file.");
 			e.printStackTrace();
 		}
-		logger.info("Saved rawFileBytes to file.");
+		//logger.info("Saved rawFileBytes to file.");
+		System.out.println("Saved rawFileBytes to file.");
 	}
 	
 	

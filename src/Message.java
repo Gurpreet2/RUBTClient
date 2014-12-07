@@ -102,20 +102,25 @@ public class Message {
 	 * @param length - length of the incoming message
 	 * @throws IOException 
 	 */
-	public static void dealWithMessage(Peer peer, DataInputStream dis) throws IOException {
+	public static void dealWithMessage(Peer peer) throws IOException {
 		//logger.info("Reading message from peer : " + peer.peerId);
-		
+		DataInputStream dis = peer.socketInput;
 		// Read the amount of bytes incoming
 		int length = dis.readInt();
-		if (length < 0 || length > 131081) return; // Got the 131081 from the Message.java class that was uploaded in Sakai. I also
-		// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
+		if (length < 0 || length > 131081){
+			System.out.println("Invalid length " + length);
+			return; // Got the 131081 from the Message.java class that was uploaded in Sakai. I also
+			// understand its importance (messages can have a maximum length of 131081 bytes... at least for now).
+
+		}
 		
 		// Peer sent a seemingly valid message so reset the peer timer (to keep the connection from timing out)
 		peer.peerLastMessage = System.currentTimeMillis();
 		
 		// Message is just a keep_alive message
 		if (length == 0) {
-			logger.info("Received {KEEP_ALIVE} message from Peer ID : [ " + peer.peerId + " ].");
+			//logger.info("Received {KEEP_ALIVE} message from Peer ID : [ " + peer.peerId + " ].");
+			//System.out.println("Received {KEEP_ALIVE} message from Peer ID : [ " + peer.peerId + " ].");
 			return;
 		}
 		
@@ -126,9 +131,16 @@ public class Message {
 		try {
 			// Read the first byte in the message and deal with the message appropriately
 			
-			byte type = dis.readByte();
+			int type = dis.readByte();
+
+			if(type < 0 || type > 8){
+				System.out.println("Unknown byte index: " + type);
+				System.exit(1);
+			}
 			//System.out.println("Byte: " + type);
-			logger.info("Received {" + message_types[type] +"} message from Peer ID : [ " + peer.peerId + " ].");
+			//logger.info("Received {" + message_types[type] +"} message from Peer ID : [ " + peer.peerId + " ].");
+			System.out.println("Received {" + message_types[type] +"} message from [ " + peer.peerIp + " ].");
+
 			switch (type) {
 				case 0:
 					peer.peerChoking = true;
@@ -203,8 +215,10 @@ public class Message {
 					//Message is a piece message
 					piece_index = dis.readInt();
 					block_offset = dis.readInt();
-					block = new byte[length - 9];
-					dis.read(block);
+					block = new byte[length-9];
+					dis.readFully(block);
+					//System.out.println("PIECE BLOCK: " + piece_index + " " + block_offset + " " + Arrays.toString(block));
+					//System.exit(1);
 					//peer.client.addToReceiveQueue(createPiece(piece_index, block_offset, block));
 					MessageDigest md = MessageDigest.getInstance("SHA");
 					byte[] hash = null;
