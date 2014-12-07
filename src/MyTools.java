@@ -4,16 +4,14 @@
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.logging.Logger;
 
@@ -142,9 +140,7 @@ public class MyTools {
 	 *  if it exists. To ensure that the rawFileBytes are correctly brought in from the file, piece hashes are created from their
 	 *  pieces and checked against the hashes in the piece_hashes array in torrentInfo
 	 */
-	public static boolean setDownloadedBytes(RUBTClient client) {
-        File file = new File(RUBTClient.downloadFile);
-        if (!file.exists()) return true;
+	public static void setDownloadedBytes(RUBTClient client) {
         client.bytesLeft = client.torrentInfo.file_length;
         client.havePieces = new boolean[client.numOfPieces];
 		MessageDigest md = null;
@@ -153,12 +149,16 @@ public class MyTools {
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
 		}
-		byte[] piece = null, getHash = null;
 		int piece_length = client.torrentInfo.piece_length;
-		client.rawFileBytes = new byte[client.torrentInfo.file_length];
-		client.rawFileBytes = MyTools.getFileBytes(file);
+		byte[] piece = new byte[piece_length], getHash = new byte[20];
         for (int i = 0; i < client.numOfPieces; i++) {
-        	piece = Arrays.copyOfRange(client.rawFileBytes, i*piece_length, (i+1)*piece_length);
+        	piece = new byte[(i == client.numOfPieces - 1) ? client.torrentInfo.file_length % piece_length : piece.length];
+        	try {
+        		client.theDownloadFile.seek(i*piece_length);
+				client.theDownloadFile.read(piece, 0, piece.length);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
         	getHash = md.digest(piece);
         	boolean isGood = true;
         	byte[] pieceHash = client.torrentInfo.piece_hashes[i].array();
@@ -166,13 +166,14 @@ public class MyTools {
         		if (pieceHash[j] != getHash[j]) isGood = false;
         	if (isGood) {
         		client.havePieces[i] = true;
-        		client.bytesLeft = client.bytesLeft - piece_length;
-        		client.bytesDownloaded = client.bytesDownloaded + piece_length;
+        		client.bytesLeft -= piece.length;
+        		client.bytesDownloaded += piece.length;
         		client.numOfHavePieces++;
         	}
         	md.reset();
         }
-        return false;
+        logger.info("File was found and fully loaded.");
+        return;
 	}
 	
 	
@@ -180,18 +181,19 @@ public class MyTools {
 	 * This method saves the bytes that have been downloaded so far if something goes wrong or the user stops the client.
 	 * @param client
 	 */
-	public synchronized static void saveDownloadedPieces(RUBTClient client) {
-		File file = new File(RUBTClient.downloadFile);
-		try (FileOutputStream fos = new FileOutputStream(RUBTClient.downloadFile)){
+	/*public synchronized static void saveDownloadedPieces(RUBTClient client) {
+		File file = new File(RUBTClient.downloadFileName);
+		try (FileOutputStream fos = new FileOutputStream(RUBTClient.downloadFileName)){
 			if (!file.exists()) file.createNewFile();
-			fos.write(client.rawFileBytes);
+			fos.write(client.theDownloadFile);
 		} catch (IOException e) {
 			System.err.println("There was an error trying to put the downloaded bytes into the download file.");
 			e.printStackTrace();
 		}
+		logger.info("Saved rawFileBytes to file.");
 		//logger.info("Saved rawFileBytes to file.");
 		System.out.println("Saved rawFileBytes to file.");
-	}
+	}*/
 	
 	
 	/**
@@ -200,12 +202,11 @@ public class MyTools {
 	 * @return
 	 * @throws IOException
 	 */
-	public static byte[] getFileBytes(File file) {
+	public static byte[] getFileBytes(RandomAccessFile file, int torrent_file_length) {
 		if (file == null) return null; //sanity check
-		Path path = file.toPath();
-		byte[] biteArray = new byte[(int) file.getTotalSpace()];
+		byte[] biteArray = new byte[torrent_file_length];
 		try {
-			biteArray = java.nio.file.Files.readAllBytes(path);
+			file.readFully(biteArray);
 		} catch (IOException e) {
 			System.err.println("There was an error converting the file into a byte array.");
 			e.printStackTrace();
