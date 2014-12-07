@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.UUID;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Logger;
 
 import javax.swing.JFrame;
@@ -35,17 +34,22 @@ public class RUBTClient extends JFrame implements Runnable{
 	/**
 	 *  The name of the torrent metainfo file.
 	 */
-	static String metainfoFile;
+	String metainfoFileName;
 	
 	/**
 	 *  The name of the torrent download file.
 	 */
-	static String downloadFile;
+	String downloadFileName;
 	
 	/**
 	 *  A peer ip. If specified, client will connect to it and start downloading from it.
 	 */
 	String onlyPeer = null;
+	
+	/**
+	 *  This will contain the raw bytes being downloaded
+	 */
+	volatile RandomAccessFile theDownloadFile;
 	
 	/**
 	 *  This will be the peer id associated with the client
@@ -88,40 +92,14 @@ public class RUBTClient extends JFrame implements Runnable{
 	volatile ArrayList<Peer> peers;
 	
 	/**
-	 *  Number of blocks there are to download
+	 *  List of Peers that the client is currently interacting with;
 	 */
-	volatile int numOfPieces;
+	volatile ArrayList<Peer> neighboring_peers = new ArrayList<Peer>(10);
 	
 	/**
-	 *  This will contain the raw bytes being downloaded
+	 *  List of peers that the client shouldn't connect to because they're terrible.
 	 */
-	volatile byte[] rawFileBytes;
-	
-	/**
-	 *  A boolean array indicating whether or not a piece has been downloaded. Will help for sending bitfield.
-	 */
-	volatile boolean[] havePieces;
-	
-	/**
-	 *  The number of pieces the client has.
-	 */
-	volatile int numOfHavePieces = 0;
-	
-	/**
-	 *  An array that will be used to send have messages to peers 
-	 *  (set to true when piece finishes downloading, reset to false after sending have message to all peers)
-	 */
-	volatile LinkedBlockingQueue<Message> haveSendQueue = new LinkedBlockingQueue<Message>(20);
-	
-	/**
-	 *  This will be used to send requests to peers, and to limit the amount of requests to send.
-	 */
-	volatile LinkedBlockingQueue<Message> requestSendQueue = new LinkedBlockingQueue<Message>(20);
-	
-	/**
-	 *  Interval for sending announcements to tracker.
-	 */
-	static int announceTimerInterval = 180;
+	volatile ArrayList<String> bad_peers = new ArrayList<String>(10);
 	
 	/**
 	 *  The number of active peers. This value is changed after handshakes are sent and received. Also after peers are disconnected
@@ -130,25 +108,24 @@ public class RUBTClient extends JFrame implements Runnable{
 	volatile int numOfActivePeers = 0;
 	
 	/**
-	 *  Number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
-	 *  (MAX_THROTTLE_INTERVAL is in Peer.java...)
+	 *  A boolean array indicating whether or not a piece has been downloaded. Will help for sending bitfield.
 	 */
-	volatile int UPLOAD_LIMIT;
+	volatile boolean[] havePieces;
 	
 	/**
-	 *  Maximum number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL.
+	 *  Number of blocks there are to download
 	 */
-	final int MAX_UPLOAD_LIMIT = 10000;
+	volatile int numOfPieces;
 	
 	/**
-	 *  Number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 *  The number of pieces the client has.
 	 */
-	volatile int DOWNLOAD_LIMIT;
+	volatile int numOfHavePieces = 0;
 	
 	/**
-	 *  Maximum number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL.
+	 *  Interval for sending announcements to tracker.
 	 */
-	final int MAX_DOWNLOAD_LIMIT = 10000;
+	static int announceTimerInterval = 180;
 	
 	/**
 	 *  Amount of times a client should try to connect to a peer before giving up on the peer.
@@ -156,19 +133,39 @@ public class RUBTClient extends JFrame implements Runnable{
 	final int MAX_CONNECTION_ATTEMPTS = 3;
 	
 	/**
-	 *  List of IPs of peers that the client shouldn't connect to, because previous connection attempts have ended in failure.
-	 */
-	ArrayList<String> bad_peers = new ArrayList<String>(10);
-	
-	/**
 	 *  Maximum number of connections allowed.
 	 */
 	final int MAX_CONNECTIONS = 10;
 	
 	/**
-	 *  List of Peers that the client is currently interacting with;
+	 *  Number of pieces that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
 	 */
-	ArrayList<String> cur_peer_interactions = new ArrayList<String>(10);
+	int UPLOAD_LIMIT;
+	
+	/**
+	 *  Maximum number of piecees that can be uploaded in interval MAX_THROTTLE_INTERVAL.
+	 */
+	final int MAX_UPLOAD_LIMIT = 4;
+	
+	/**
+	 *  Number of pieces that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 */
+	volatile int DOWNLOAD_LIMIT;
+	
+	/**
+	 *  Maximum number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL.
+	 */
+	int MAX_DOWNLOAD_LIMIT = 12;
+	
+	/**
+	 *  If the client is seeding.
+	 */
+	volatile boolean amSeeding = false;
+	
+	/**
+	 *  How far along the download is.
+	 */
+	int percentComplete;
 
 	/**
 	 *  Value that is true while file is downloading, false when file finishes downloading.
@@ -207,23 +204,38 @@ public class RUBTClient extends JFrame implements Runnable{
 		}*/
 		
 		// Hold the cammand line arguments in some variables so they can be called from methods outside main
-		RUBTClient.metainfoFile = args[0];
-		RUBTClient.downloadFile = args[1];
+		client.metainfoFileName = args[0];
+		client.downloadFileName = args[1];
 		if (args.length == 3) client.onlyPeer = args[2];
 		
 		// Convert the torrent metainfo file into a TorrentInfo file, and use it to initialize some variables for client
-        client.torrentInfo = MyTools.getTorrentInfo(RUBTClient.metainfoFile);
+        client.torrentInfo = MyTools.getTorrentInfo(client.metainfoFileName);
         client.numOfPieces = client.torrentInfo.piece_hashes.length;
+	    File file = new File(client.downloadFileName);
         // If the client was stopped earlier, and the download file exists, fill rawFileBytes with the bytes from the file
-        if (!MyTools.setDownloadedBytes(client)) {
+        if (file.exists()) {
         	logger.info("Download file found, resuming download.");
+        	try {
+				client.theDownloadFile = new RandomAccessFile(file, "rwd");
+				MyTools.setDownloadedBytes(client);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
         } else {
         	// Else, initialize variables needed for a fresh download
         	logger.info("Starting new download.");
 	        client.bytesLeft = client.torrentInfo.file_length;
 	        client.havePieces = new boolean[client.numOfPieces];
-	        client.rawFileBytes = new byte[client.torrentInfo.file_length];
+	        try {
+	        	file.createNewFile();
+				client.theDownloadFile = new RandomAccessFile(file, "rwd");
+				client.theDownloadFile.setLength(client.torrentInfo.file_length);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
         }
+        client.percentComplete = client.numOfHavePieces*100/client.numOfPieces;
+        if (client.numOfHavePieces == client.numOfPieces) client.amSeeding = true;
         
         // Connect to the Tracker and send a started announcement
         new Request(client, "started");
@@ -236,9 +248,9 @@ public class RUBTClient extends JFrame implements Runnable{
         	return;
         }
         
-        /*// Input Reader
+        // Input Reader
         InputReader ir = client.new InputReader();
-        ir.start();*/
+        ir.start();
         
         // Put peer_map into a peer array so it can be more easily used and read, also start the threads for each peer
         if (args.length == 2) {
@@ -247,11 +259,10 @@ public class RUBTClient extends JFrame implements Runnable{
 	        // Start connecting to and messaging peers
 	        for (Peer peer : client.peers) {
 				if (client.numOfActivePeers < client.MAX_CONNECTIONS) {
-					if(peer.peerIp.startsWith("128.6.171.")){ //TODO: Allow all peers
-						client.cur_peer_interactions.add(peer.peerIp);
+					//if(peer.peerIp.startsWith("128.6.171.")){ //TODO: Allow all peers
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 		    			peer.start();
-					}
+					//}
 	    		} else
 	    			logger.info("Unable to connect with Peer ID : [ " + peer.peerId + " ]. Maximum number of connections reached.");
 	        }
@@ -269,7 +280,6 @@ public class RUBTClient extends JFrame implements Runnable{
         	System.out.println("Added peer");
         	client.peers.add(new Peer(null, client.onlyPeer, port, client));
         }
-        //client.peers.get(0).start();
         
         // Thread start for client
         new Thread(client).start();
@@ -310,11 +320,11 @@ public class RUBTClient extends JFrame implements Runnable{
 			        ArrayList<Peer> peers = MyTools.createPeerList(RUBTClient.this, peer_map);
 			        for (Peer peer : peers) {
 			        	if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS 
-			        			&& !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp) 
+			        			&& !RUBTClient.this.neighboring_peers.contains(peer) 
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
-			        		RUBTClient.this.cur_peer_interactions.add(peer.peerIp);
-				        	System.out.println("Added peer");
-
+			        		RUBTClient.this.neighboring_peers.add(peer);
+			        		System.out.println("Added peer");
+			        		
 			        		RUBTClient.this.peers.add(peer);
 			        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 			    			peer.start();
@@ -324,10 +334,10 @@ public class RUBTClient extends JFrame implements Runnable{
 			        // Look at the old peers and see if any of them deserve a chance to be connected to, again
 			        for (Peer peer : RUBTClient.this.peers) {
 			        	if (peer.connectionAttempts < RUBTClient.this.MAX_CONNECTION_ATTEMPTS 
-			        			&& (peer.peerIp != null ? !RUBTClient.this.cur_peer_interactions.contains(peer.peerIp) : true) // Adjusted for incoming peer connections
+			        			&& (peer.peerIp != null ? !RUBTClient.this.neighboring_peers.contains(peer) : true) // Adjusted for incoming peer connections
 			        			// In case I add something later on that puts peers in bad_peers even when connectionAttempts < MAX_CONNECTION_ATTEMPTS
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
-			        		RUBTClient.this.cur_peer_interactions.add(peer.peerIp);
+			        		RUBTClient.this.neighboring_peers.add(peer);
 			        		System.out.println("Starting NEW thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 			    			peer.start();
 			        	}
@@ -337,70 +347,45 @@ public class RUBTClient extends JFrame implements Runnable{
 		};
 		timer.schedule(timerTask, RUBTClient.announceTimerInterval*1000, RUBTClient.announceTimerInterval*1000);
 		
-		int downloaded = this.bytesDownloaded;
-		System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
+		int numOfActivePeers = this.numOfActivePeers;
+		int percentComplete;
+		if (this.numOfHavePieces != this.numOfPieces)
+			percentComplete = this.numOfHavePieces*100/this.numOfPieces;
+		else
+			percentComplete = 100;
+		System.out.println("Download is " + percentComplete + "% complete.");
 		while(this.RUN) {
-		
-			// Send keep alives to peers
-			for (Peer peer : this.peers) {
-				if (peer.clientLastMessage + peer.MAX_KEEPALIVE_INTERVAL > System.currentTimeMillis())
-					if (peer.amInterested) {
-						//peer.sendMessage(Message.createKeepAlive());
-						peer.clientLastMessage = System.currentTimeMillis();
-						peer.peerLastMessage = System.currentTimeMillis();
-					}
 			
-				// Check if the peer wants to keep the connection open
-				if (peer.peerLastMessage + peer.MAX_KEEPALIVE_INTERVAL + 25000> System.currentTimeMillis()) {
-					//peer.shutdown();
-				}
-				if(peer.isActive == false){
-		        	//System.out.println("Removed peer");
-		        	//peer.interrupt();
-					//this.peers.remove(peer);
-				}
-			}
+			// Set the amount completed
+			this.percentComplete = this.numOfHavePieces*100/this.numOfPieces;
 			
 			// Set the upload and download limits for each peer
-			if (this.numOfActivePeers < 1) {
-				this.UPLOAD_LIMIT = this.MAX_UPLOAD_LIMIT;
-				this.DOWNLOAD_LIMIT = this.MAX_DOWNLOAD_LIMIT;
-			} else {
-				this.UPLOAD_LIMIT = this.MAX_UPLOAD_LIMIT / this.numOfActivePeers;
-				this.DOWNLOAD_LIMIT = this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers;
+			if (numOfActivePeers != this.numOfActivePeers) {
+				if (this.numOfActivePeers < 2) {
+					this.UPLOAD_LIMIT = this.MAX_UPLOAD_LIMIT;
+					this.DOWNLOAD_LIMIT = this.MAX_DOWNLOAD_LIMIT;
+				} else {
+					this.UPLOAD_LIMIT = (this.MAX_UPLOAD_LIMIT / this.numOfActivePeers < 1) ? 1 : (this.MAX_UPLOAD_LIMIT / this.numOfActivePeers);
+					this.DOWNLOAD_LIMIT = (this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers < 1) ? 1 : (this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers);
+				}
+				numOfActivePeers = this.numOfActivePeers;
 			}
-			
+				
 			// Prints how far along the download is, whenever the download progresses.
-			if (downloaded != this.bytesDownloaded) {
-				System.out.println("Download is " + (this.bytesDownloaded*100/this.rawFileBytes.length) + "% complete.");
-				downloaded = this.bytesDownloaded;
-			}
-			
-			// This sends have messages when required
-			if (!this.haveSendQueue.isEmpty()) {
-				try {
-					Message message = this.haveSendQueue.take();
-					for (Peer peer : peers) {
-						if (peer.socket == null || peer.socketOutput == null) continue;
-						if (peer.socket.isClosed()) continue;
-						peer.sendMessage(message);
+			if (this.numOfHavePieces != this.numOfPieces) {
+				if (percentComplete != this.percentComplete) {
+					System.out.println("Download is " + this.percentComplete + "% complete.");
+					percentComplete = this.percentComplete;
+					if (percentComplete == 100) {
+						new Request(this, "completed");
+						logger.info("Sent completed announcement to tracker.");
+						logger.info("Seeding...");
 					}
-				} catch (InterruptedException e) {
-					e.printStackTrace();
 				}
 			}
-			if (this.bytesLeft == 0) this.RUN = false;
 		}
 		
 		timer.cancel();
-		
-		if (this.bytesLeft == 0) {// Just making sure that there are no more bytes left to download, in case the above loop had some problem
-			new Request(this, "completed");
-			logger.info("Sent completed announcement to tracker.");
-		}
-        
-        // After the threads have been shutdown, save the downloaded rawfilebytes into a file.
-        MyTools.saveDownloadedPieces(this);
 	}
 	
 	
@@ -457,9 +442,9 @@ public class RUBTClient extends JFrame implements Runnable{
 		public void newPeer(Socket socket) {
 			
 			Peer peer = new Peer(null, socket.getInetAddress().getHostAddress(), socket.getPort(), RUBTClient.this);
-			//RUBTClient.this.peers.add(peer);
-			//if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS)
-				//peer.start();
+			RUBTClient.this.peers.add(peer);
+			if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS)
+				peer.start();
 		}
 	}
 	
