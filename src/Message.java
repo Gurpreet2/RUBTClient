@@ -139,7 +139,9 @@ public class Message {
 			}
 			//System.out.println("Byte: " + type);
 			//logger.info("Received {" + message_types[type] +"} message from Peer ID : [ " + peer.peerId + " ].");
-			System.out.println("Received {" + message_types[type] +"} message from [ " + peer.peerIp + " ].");
+			if(type != 4){
+				System.out.println("Received {" + message_types[type] +"} message from [ " + peer.peerIp + " ].");
+			}
 
 			switch (type) {
 				case 0:
@@ -194,7 +196,7 @@ public class Message {
 							count++;
 						}
 					}
-					System.out.println("Peer bitfield: " + Arrays.toString(peer.peerBytefield));
+					System.out.println(peer.peerIp + "'s bitfield: " + Arrays.toString(peer.peerBytefield));
 					peer.sizeOfBytefield = count;
 					break;
 				case 6:

@@ -267,7 +267,17 @@ public class Peer extends Thread{
 						this.sendMessage(Message.createNotInterested());
 						continue;
 					}
-					this.sendMessage(Message.createRequest(count, 0, this.client.torrentInfo.piece_length));
+					if(count == (this.client.numOfPieces - 1)){
+						System.out.println("Request for last piece of different size");
+						this.sendMessage(Message.createRequest(count, 0, this.client.torrentInfo.file_length % this.client.torrentInfo.piece_length));
+						//System.exit(1);
+					}
+					else{
+						System.out.println("REQUEST PIECE");
+						this.sendMessage(Message.createRequest(count, 0, this.client.torrentInfo.piece_length));
+						//System.exit(1);
+					}
+					//this.sendMessage(Message.createRequest(count, 0, this.client.torrentInfo.piece_length));
 					count++;
 				} else if (count == this.client.numOfPieces && this.downloadedFromPeer == this.sizeOfBytefield) {
 					logger.info("All pieces downloaded from peer: " + this.peerId);
@@ -461,9 +471,10 @@ public class Peer extends Thread{
 			shutdown();
 		}
 		//logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " + ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp)) + " ].");
-		System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer " 
-				+ ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp))
-				+ " ].");
+		System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer IP : [ " + this.peerIp);
+		if(message.message_id == 5){
+			System.out.println("Bitfield sent: " + Arrays.toString(message.bytePayload));
+		}
 		try {
 			this.socketOutput.writeInt(message.length_prefix);
 			if (message.message_id != (byte) -1) {
