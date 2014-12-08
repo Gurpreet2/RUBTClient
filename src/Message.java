@@ -159,7 +159,7 @@ public class Message {
 					break;
 				case 2:
 					peer.peerInterested = true;
-					peer.sendMessage(createUnchoke());
+					if (peer.amChoking) peer.sendMessage(createUnchoke()); //TODO fix, because peer can get out of choke by sending interesteds
 					break;
 				case 3:
 					peer.peerInterested = false;
@@ -171,20 +171,34 @@ public class Message {
 					//First, read the piece_index of the have message
 					piece_index = dis.readInt();
 					//Set value of the peerhavearray to true
-					peer.peerHaveArray[piece_index] = true;
+					if (!peer.peerHaveArray[piece_index]) {
+						peer.peerHaveArray[piece_index] = true;
+						peer.peerHaveArraySize++;
+					} else
+						break;
 					//create a new request message to get the piece if client doesn't have it
 					if (!peer.client.havePieces[piece_index]) {
 						// Send interested and unchoke since its a piece you want
 						if (!peer.sentGreetings) {
 				        	peer.sendMessage(createInterested());
-				        	peer.sendMessage(createUnchoke());
+				        	if (peer.amChoking) peer.sendMessage(createUnchoke());
 				        	peer.sentGreetings = true;
 						}
 						peer.wantFromPeer++;
+						Message message = null;
 						if (piece_index == peer.client.numOfPieces - 1)
-							peer.requestSendQueue.put(createRequest(piece_index, 0, peer.client.torrentInfo.file_length % piece_length));
+							message = createRequest(piece_index, 0, peer.client.torrentInfo.file_length % piece_length);
 						else
-							peer.requestSendQueue.put(createRequest(piece_index, 0, peer.client.torrentInfo.piece_length));
+							message = createRequest(piece_index, 0, peer.client.torrentInfo.piece_length);
+						peer.requestSendQueue.add(message);
+						// Rarest piece first
+						for (Peer peer1 : peer.client.neighboring_peers) {
+							if (peer.peerId.equals(peer1.peerId)) continue;
+							if (peer1.requestSendQueue.contains(message)) {
+								//peer1.requestSendQueue.remove(message);
+								peer1.requestSendQueue.put(message);
+							}
+						}
 					}
 					break;
 				case 5:
@@ -195,18 +209,30 @@ public class Message {
 					dis.readFully(peerBitfield);
 					peer.peerBitfield = peerBitfield;
 					for (int i = 0; i < peer.client.numOfPieces; i++) {
-						if (MyTools.isBitSet(peerBitfield, i) && !peer.client.havePieces[i]) {
+						boolean isBitSet = MyTools.isBitSet(peerBitfield, i);
+						if (isBitSet) peer.peerHaveArray[i] = true;
+						if (isBitSet && !peer.client.havePieces[i]) {
 							//Send unchoke and interested if peer has something I want
 							if (!peer.sentGreetings) {
 							    peer.sendMessage(createInterested());
-							    peer.sendMessage(createUnchoke());
+							    if (peer.amChoking) peer.sendMessage(createUnchoke());
 							    peer.sentGreetings = true;
 							}
 							peer.wantFromPeer++;
+							Message message = null;
 							if (i == peer.client.numOfPieces - 1)
-								peer.requestSendQueue.put(createRequest(i, 0, peer.client.torrentInfo.file_length % piece_length));
+								message = createRequest(i, 0, peer.client.torrentInfo.file_length % piece_length);
 							else
-								peer.requestSendQueue.put(createRequest(i, 0, peer.client.torrentInfo.piece_length));
+								message = createRequest(i, 0, peer.client.torrentInfo.piece_length);
+							// Rarest piece first
+							peer.requestSendQueue.add(message);
+							for (Peer peer1 : peer.client.neighboring_peers) {
+								if (peer.peerId.equals(peer1.peerId)) continue;
+								if (peer1.requestSendQueue.contains(message)) {
+									peer1.requestSendQueue.remove(message);
+									peer1.requestSendQueue.put(message);
+								}
+							}
 						}
 					}
 					break;
