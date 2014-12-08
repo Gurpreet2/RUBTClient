@@ -138,24 +138,34 @@ public class RUBTClient extends JFrame implements Runnable{
 	final int MAX_CONNECTIONS = 10;
 	
 	/**
-	 *  Number of pieces that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 *  Number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
 	 */
-	int UPLOAD_LIMIT;
+	volatile int UPLOAD_LIMIT;
 	
 	/**
-	 *  Maximum number of piecees that can be uploaded in interval MAX_THROTTLE_INTERVAL.
+	 *  Maximum number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL.
 	 */
-	final int MAX_UPLOAD_LIMIT = 4;
+	final int MAX_UPLOAD_LIMIT = 130000;
 	
 	/**
-	 *  Number of pieces that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
+	 *  Upload limit cannot go lower than this.
+	 */
+	volatile int UPLOAD_LOWER_LIMIT;
+	
+	/**
+	 *  Number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
 	 */
 	volatile int DOWNLOAD_LIMIT;
 	
 	/**
 	 *  Maximum number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL.
 	 */
-	int MAX_DOWNLOAD_LIMIT = 12;
+	final int MAX_DOWNLOAD_LIMIT = 390000;
+	
+	/**
+	 *  Download limit cannot go lower than this.
+	 */
+	int DOWNLOAD_LOWER_LIMIT = 35000;
 	
 	/**
 	 *  If the client is seeding.
@@ -377,8 +387,10 @@ public class RUBTClient extends JFrame implements Runnable{
 					this.UPLOAD_LIMIT = this.MAX_UPLOAD_LIMIT;
 					this.DOWNLOAD_LIMIT = this.MAX_DOWNLOAD_LIMIT;
 				} else {
-					this.UPLOAD_LIMIT = (this.MAX_UPLOAD_LIMIT / this.numOfActivePeers < 1) ? 1 : (this.MAX_UPLOAD_LIMIT / this.numOfActivePeers);
-					this.DOWNLOAD_LIMIT = (this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers < 1) ? 1 : (this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers);
+					this.UPLOAD_LIMIT = 
+							(this.MAX_UPLOAD_LIMIT / this.numOfActivePeers < this.torrentInfo.piece_length) ? this.UPLOAD_LOWER_LIMIT : (this.MAX_UPLOAD_LIMIT / this.numOfActivePeers);
+					this.DOWNLOAD_LIMIT = 
+							(this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers < this.torrentInfo.piece_length) ? this.DOWNLOAD_LOWER_LIMIT : (this.MAX_DOWNLOAD_LIMIT / this.numOfActivePeers);
 				}
 				numOfActivePeers = this.numOfActivePeers;
 			}
@@ -419,8 +431,8 @@ public class RUBTClient extends JFrame implements Runnable{
 	 * @returns int: percent value left to download 
 	 */
 	public int getProgressBarPercent() {
-		double fraction = ((double)this.bytesDownloaded/(double)this.torrentInfo.file_length);
-		return (int)fraction*100;
+		//double fraction = ((double)this.bytesDownloaded/(double)this.torrentInfo.file_length);
+		return this.percentComplete;//(int)fraction*100;
 	}
 	
 	
