@@ -278,7 +278,7 @@ public class RUBTClient extends JFrame implements Runnable{
 					}
 					else if(client.onlyPeer == null){
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
-		    			//peer.start();
+		    			peer.start();
 					//}
 					}
 				}
@@ -307,7 +307,7 @@ public class RUBTClient extends JFrame implements Runnable{
         
         // Thread start for client
         new Thread(client).start();
-        //startGui(client);
+        startGui(client);
         
 		//if (client.onlyPeer == null) {
 			PeerListener peerListener = client.new PeerListener();
