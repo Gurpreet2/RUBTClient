@@ -255,10 +255,14 @@ public class Message {
 							}
 							peer.wantFromPeer++;
 							Message message = null;
-							if (i == peer.client.numOfPieces - 1)
+							if (i == peer.client.numOfPieces - 1){
 								message = createRequest(i, 0, peer.client.torrentInfo.file_length % piece_length);
-							else
+								//System.out.println("asdf");
+							}
+							else{
 								message = createRequest(i, 0, peer.client.torrentInfo.piece_length);
+							//	System.out.println("fdsa");
+							}
 							// Rarest piece first
 							peer.requestSendQueue.add(message);
 							try{
@@ -293,10 +297,16 @@ public class Message {
 					break;
 				case 7:
 					//Message is a piece message
+
 					piece_index = dis.readInt();
 					block_offset = dis.readInt();
 					block = new byte[length-9];
 					dis.readFully(block);
+					
+					if(peer.client.amSeeding){
+						System.out.println("Client already seeding, don't need piece");
+						break;
+					}
 					//System.out.println("PIECE BLOCK: " + piece_index + " " + block_offset + " " + Arrays.toString(block));
 					//System.exit(1);
 					// Verify the piece message's hash
@@ -319,6 +329,7 @@ public class Message {
 						peer.requestsSent--;
 						peer.requestedQueue.remove(createRequest(piece_index, block_offset, block.length));
 						peer.bytes_received += block.length; // For throttle
+						peer.fileBytesUploaded += block.length;
 						for (Peer peer1 : peer.client.neighboring_peers)
 							peer1.haveSendQueue.offer(createHave(piece_index), 2500, TimeUnit.MILLISECONDS);
 					} else {

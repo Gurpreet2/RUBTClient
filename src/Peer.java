@@ -208,6 +208,9 @@ public class Peer extends Thread{
 	 */
 	int bytesFromPeer = 0;
 	
+	int fileBytesUploaded = 0;
+	int fileBytesDownloaded = 0;
+	
 	/**
 	 *  Indicate whether or not the peer is a bad torrent controller. Set to false if client receives a bitfield message from peer.
 	 *  Used to help determine if a peer is a seed.
@@ -444,6 +447,10 @@ public class Peer extends Thread{
 				// Send requests to the peer, MAX_REQUESTS out at one time
 				while (!this.amChoking && !this.peerChoking && this.requestsSent < this.MAX_REQUESTS && !this.requestSendQueue.isEmpty()) {
 					Message message = this.requestSendQueue.poll();
+					if(client.havePieces[message.intPayload[0]]){
+						System.out.println("CLIENT ALREADY HAS THIS PIECE");
+						continue;
+					}
 					if (!this.requestedQueue.contains(message)) this.requestedQueue.add(message);
 					this.sendMessage(message);
 					this.requestsSent++;
@@ -722,6 +729,7 @@ public class Peer extends Thread{
 			if(message_types[message.message_id + 1].equals("PIECE")){
 				System.out.println("\nSENT A PIECE\n");
 				this.client.bytesUploaded += message.bytePayload.length;
+				this.fileBytesDownloaded += message.bytePayload.length;
 			}
 			
 		} catch (IOException e) {

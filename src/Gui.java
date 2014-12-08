@@ -98,12 +98,12 @@ public class Gui extends JFrame implements ActionListener{
 		progbar.setStringPainted(true);
 		progbar.setBounds(20, 35, 260, 20);
 		info.add(progbar);
-		String[] columnNames = {"Peer IP", "Port", "Percentage Complete"};
+		String[] columnNames = {"Peer IP", "Port", "Percentage Complete", "Downloaded From", "Uploaded To"};
 		ArrayList<Peer> peers = client.peers;
 		int peer_index = 0;
-		Object[][] data = new Object[peers.size()][3];
+		Object[][] data = new Object[peers.size()][5];
 		for(int row=0; row < peers.size(); row++){
-			for(int col=0; col < 3; col++){
+			for(int col=0; col < 5; col++){
 				switch(col){
 					case 0:
 						data[row][col] = peers.get(peer_index).peerIp;
@@ -113,6 +113,12 @@ public class Gui extends JFrame implements ActionListener{
 						break;
 					case 2:
 						data[row][col] = peers.get(peer_index).percentPeerHas + "%";
+						break;
+					case 3:
+						data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
+						break;
+					case 4:
+						data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
 						break;
 				}
 			}
@@ -136,12 +142,12 @@ public class Gui extends JFrame implements ActionListener{
 				ratio.setText("<html><u>Ratio:</u> " + (double)Math.round(((double)client.bytesUploaded / client.bytesDownloaded) * 100) / 100 + "</html>");
 				peers_label.setText("<html><u>Peers:</u> " + client.peers.size() + "</html>");
 			
-				String[] columnNames = {"Peer IP", "Port", "Percentage Complete"};
+				String[] columnNames = {"Peer IP", "Port", "Percentage Complete", "Downloaded From", "Uploaded To"};
 				ArrayList<Peer> peers = client.peers;
 				int peer_index = 0;
-				Object[][] data = new Object[peers.size()][3];
+				Object[][] data = new Object[peers.size()][5];
 				for(int row=0; row < peers.size(); row++){
-					for(int col=0; col < 3; col++){
+					for(int col=0; col < 5; col++){
 						switch(col){
 							case 0:
 								data[row][col] = peers.get(peer_index).peerIp;
@@ -152,10 +158,17 @@ public class Gui extends JFrame implements ActionListener{
 							case 2:
 								data[row][col] = peers.get(peer_index).percentPeerHas + "%";
 								break;
+							case 3:
+								data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
+								break;
+							case 4:
+								data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
+								break;
 						}
 					}
 					peer_index++;
 				}
+				table.repaint();
 				table = new JTable(data, columnNames);
 			}
 			
