@@ -27,7 +27,8 @@ public class Gui extends JFrame implements ActionListener{
 	JLabel MAX_UPLOAD, MAX_DOWNLOAD, MAX_SLOTS;
 	JTextField max_up_txt, max_dl_txt, max_slots_txt;
 	JButton save, play_pause;
-	
+	ArrayList<Peer> peers;
+	Peer peer;
 	public Gui(RUBTClient rubt){
 		container = new JPanel();
 		container.setLayout(new BoxLayout(container, BoxLayout.Y_AXIS));
@@ -99,7 +100,7 @@ public class Gui extends JFrame implements ActionListener{
 		progbar.setBounds(20, 35, 260, 20);
 		info.add(progbar);
 		String[] columnNames = {"Peer IP", "Port", "Percentage Complete", "Downloaded From", "Uploaded To"};
-		ArrayList<Peer> peers = client.peers;
+		peers = client.peers;
 		int peer_index = 0;
 		Object[][] data = new Object[peers.size()][5];
 		for(int row=0; row < peers.size(); row++){
@@ -142,43 +143,56 @@ public class Gui extends JFrame implements ActionListener{
 				ratio.setText("<html><u>Ratio:</u> " + (double)Math.round(((double)client.bytesUploaded / client.bytesDownloaded) * 100) / 100 + "</html>");
 				peers_label.setText("<html><u>Peers:</u> " + client.peers.size() + "</html>");
 			
-				String[] columnNames = {"Peer IP", "Port", "Percentage Complete", "Downloaded From", "Uploaded To"};
-				ArrayList<Peer> peers = client.peers;
+				peers = client.peers;
 				int peer_index = 0;
-				Object[][] data = new Object[peers.size()][5];
 				Object temp;
 				for(int row=0; row < peers.size(); row++){
-					for(int col=0; col < 5; col++){
-						switch(col){
-							case 0:
-								temp = peers.get(peer_index).peerIp;
-								table.setValueAt(temp, row, col);
-								break;
-							case 1:
-								temp = new Integer(6881);
-								table.setValueAt(temp, row, col);
-								//data[row][col] = new Integer(6881);
-								break;
-							case 2:
-								temp = peers.get(peer_index).percentPeerHas + "%";
-								table.setValueAt(temp, row, col);
-								//data[row][col] = peers.get(peer_index).percentPeerHas + "%";
-								break;
-							case 3:
-								temp = peers.get(peer_index).fileBytesDownloaded / 100000 + "KB";
-								table.setValueAt(temp, row, col);
-								//data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
-								break;
-							case 4:
-								temp = peers.get(peer_index).fileBytesUploaded / 100000 + "KB";
-								table.setValueAt(temp, row, col);
-								//data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
-								break;
+					try{
+						peer = peers.get(peer_index);
+					}
+					catch(Exception e){
+						peer = null;
+						row--;
+					}
+					try{
+						if(peer != null){
+							for(int col=0; col < 5; col++){
+								switch(col){
+									case 0:
+										temp = peer.peerIp;
+										table.setValueAt(temp, row, col);
+										break;
+									case 1:
+										temp = new Integer(6881);
+										table.setValueAt(temp, row, col);
+										//data[row][col] = new Integer(6881);
+										break;
+									case 2:
+										temp = peer.percentPeerHas + "%";
+										table.setValueAt(temp, row, col);
+										//data[row][col] = peers.get(peer_index).percentPeerHas + "%";
+										break;
+									case 3:
+										temp = peer.fileBytesUploaded / 100000 + "KB";
+										table.setValueAt(temp, row, col);
+										//data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
+										break;
+									case 4:
+										temp = peer.fileBytesDownloaded / 100000 + "KB";
+										table.setValueAt(temp, row, col);
+										//data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
+										break;
+								}
+							}
 						}
 					}
+					catch(Exception e){
+						
+					}
+						
 					peer_index++;
 				}
-				table.repaint();
+				//table.repaint();
 				//table = new JTable(data, columnNames);
 			}
 			
@@ -220,13 +234,17 @@ public class Gui extends JFrame implements ActionListener{
 		if(src == play_pause){
 			if(src.getText().equals("Pause Torrent")){
 				//TODO: Client pause
-				client.pause();
+				//client.pause();
+				client.DOWNLOAD_LIMIT = 0;
+				client.UPLOAD_LIMIT = 0;
 				status.setText("<html><u>Status:</u> Paused</html>");
 				src.setText("Resume Torrent");
 			}
 			else if(src.getText().equals("Resume Torrent")){
 				//TODO: undo client pause
 				src.setText("Pause Torrent");
+				client.DOWNLOAD_LIMIT = 10000;
+				client.UPLOAD_LIMIT = 10000;
 				status.setText("<html><u>Status:</u> " + (client.amSeeding ? "Seeding" : "Downloading") + "</html>");
 			}
 			

@@ -201,11 +201,9 @@ public class Message {
 						Message message = null;
 						if (piece_index == peer.client.numOfPieces - 1){
 							message = createRequest(piece_index, 0, peer.client.torrentInfo.file_length % piece_length);
-							System.out.println("Requesting last piece");
 						}
 						else{
 							message = createRequest(piece_index, 0, peer.client.torrentInfo.piece_length);
-							System.out.println("Requesting regular piece");
 						}
 						peer.requestSendQueue.add(message);
 						// Rarest piece first
@@ -303,8 +301,8 @@ public class Message {
 					block = new byte[length-9];
 					dis.readFully(block);
 					
-					if(peer.client.amSeeding){
-						System.out.println("Client already seeding, don't need piece");
+					if(peer.client.havePieces[piece_index]){
+						System.out.println("Client already has piece, don't need it");
 						break;
 					}
 					//System.out.println("PIECE BLOCK: " + piece_index + " " + block_offset + " " + Arrays.toString(block));
@@ -318,6 +316,7 @@ public class Message {
 					for (int i = 0; i < checkWith.length; i++)
 						if (checkWith[i] != hash[i]) cray = false;
 					if (cray) {
+						peer.writing = true;
 						peer.client.theDownloadFile.seek(piece_index * piece_length);
 						peer.client.theDownloadFile.write(block, 0, block.length);
 						peer.client.bytesLeft -= block.length;
@@ -336,6 +335,7 @@ public class Message {
 						System.out.println("Requesting piece again");
 						peer.requestSendQueue.put(createRequest(piece_index, block_offset, length));
 					}
+					peer.writing = false;
 					break;
 				case 8: // CANCEL Message
 					piece_index = dis.readInt();

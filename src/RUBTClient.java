@@ -85,7 +85,7 @@ public class RUBTClient extends JFrame implements Runnable{
 	 *  Responses from the tracker after sending it periodic announcements will be stored in response_2
 	 */
 	Response response2;
-	
+		
 	/**
 	 *  This arraylist stores the peers in a peer objects arraylist
 	 */

@@ -237,6 +237,8 @@ public class Peer extends Thread{
 	 */
 	volatile long peerLastMessage;
 	
+	boolean writing = false;
+	
 	/**
 	 *  The interval (in milliseconds) in which a message needs to be communicated to a peer to keep the connection alive.
 	 */
