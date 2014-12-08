@@ -47,7 +47,7 @@ public class Gui extends JFrame implements ActionListener{
 		
 		MAX_DOWNLOAD = new JLabel("Max Download Speed (KBps):");
 		MAX_UPLOAD = new JLabel("Max Upload Speed (KBps):");
-		MAX_SLOTS= new JLabel("Max Slots:");
+		MAX_SLOTS= new JLabel("Max Connections:");
 		
 		max_up_txt = new JTextField("", 20);
 		max_dl_txt = new JTextField("", 20);
@@ -76,7 +76,7 @@ public class Gui extends JFrame implements ActionListener{
 		file_size = new JLabel("<html><u>Size:</u> " + (rubt.torrentInfo.file_length / 1000000) + "MB</html>");
 		
 		downloaded = new JLabel("<html><u>Downloaded:</u> " + (rubt.bytesDownloaded / 1000000) + "MB</html>");
-		uploaded = new JLabel("<html><u>Uploaded:</u> " + (rubt.bytesUploaded / 1000000)+ "B</html>");
+		uploaded = new JLabel("<html><u>Uploaded:</u> " + (double)Math.round(((double)client.bytesUploaded / 100000) * 100) / 100 + "KB</html>");
 		ratio = new JLabel("<html><u>Ratio:</u> " + ((double)rubt.bytesUploaded / rubt.bytesDownloaded) + "</html>");
 		peers_label = new JLabel("<html><u>Peers:</u> " + this.client.peers.size());
 		info.add(status);
@@ -128,10 +128,11 @@ public class Gui extends JFrame implements ActionListener{
 			@Override
 			public void run() {
 				progbar.setValue(client.getProgressBarPercent());
-				status.setText("<html><u>Status:</u> " + (client.amSeeding ? "Seeding" : "Downloading") + "</html>");
-				
+				if(status.getText().indexOf("Paused") == -1){
+					status.setText("<html><u>Status:</u> " + (client.amSeeding ? "Seeding" : "Downloading") + "</html>");
+				}
 				downloaded.setText("<html><u>Downloaded:</u> " + (client.bytesDownloaded / 1000000) + "MB</html>");
-				uploaded.setText("<html><u>Uploaded:</u> " + (client.bytesUploaded / 1000000)+ "MB</html>");
+				uploaded.setText("<html><u>Uploaded:</u> " + (double)Math.round(((double)client.bytesUploaded / 100000) * 100) / 100 + "KB</html>");
 				ratio.setText("<html><u>Ratio:</u> " + (double)Math.round(((double)client.bytesUploaded / client.bytesDownloaded) * 100) / 100 + "</html>");
 				peers_label.setText("<html><u>Peers:</u> " + client.peers.size() + "</html>");
 			
@@ -169,23 +170,29 @@ public class Gui extends JFrame implements ActionListener{
 		status.setText("");
 		if(src == save){
 			if(max_dl_txt.getText().length() != 0){
-				//client.MAX_DOWNLOAD_LIMIT = Integer.getInteger(max_dl_txt.getText()) * 100000;
+				client.DOWNLOAD_LIMIT = (Integer.getInteger(max_dl_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_dl_txt.getText()) * 100000);
+				max_dl_txt.setText("" + client.DOWNLOAD_LIMIT / 100000);
 			}
 			if(max_up_txt.getText().length() != 0){
-				//client.MAX_UPLOAD_LIMIT = Integer.getInteger(max_up_txt.getText()) * 100000;
+				client.UPLOAD_LIMIT = (Integer.getInteger(max_up_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_up_txt.getText()) * 100000);
+				max_up_txt.setText("" + client.UPLOAD_LIMIT / 100000);
 			}
 			if(max_slots_txt.getText().length() != 0){
-				//client.MAX_CONNECTIONS = Integer.getInteger(max_slots_txt.getText());
+				client.MAX_CONNECTIONS = (Integer.getInteger(max_slots_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_slots_txt.getText()) * 100000);
+				max_slots_txt.setText("" + client.MAX_CONNECTIONS);
 			}
 		}
 		if(src == play_pause){
 			if(src.getText().equals("Pause Torrent")){
 				//TODO: Client pause
+				client.pause();
+				status.setText("<html><u>Status:</u> Paused</html>");
 				src.setText("Resume Torrent");
 			}
 			else if(src.getText().equals("Resume Torrent")){
 				//TODO: undo client pause
 				src.setText("Pause Torrent");
+				status.setText("<html><u>Status:</u> " + (client.amSeeding ? "Seeding" : "Downloading") + "</html>");
 			}
 			
 		}

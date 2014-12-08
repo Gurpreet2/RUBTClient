@@ -140,11 +140,10 @@ public class Message {
 			}
 			//System.out.println("Byte: " + type);
 			//logger.info("Received {" + message_types[type] +"} message from Peer ID : [ " + peer.peerId + " ].");
-			/*if(type != 4){
-				System.out.println("Received {" + message_types[type] +"} message from [ "
-						+ "ID : [ " + peer.peerId + "] with IP : [ " + peer.peerIp
+			if(type != 4){
+				System.out.println("Received {" + message_types[type] +"} message from IP : [ " + peer.peerIp
 						+ " ].");
-			}*/
+			}
 			
 			switch (type) {
 				case 0:
@@ -200,10 +199,14 @@ public class Message {
 						}
 						peer.wantFromPeer++;
 						Message message = null;
-						if (piece_index == peer.client.numOfPieces - 1)
+						if (piece_index == peer.client.numOfPieces - 1){
 							message = createRequest(piece_index, 0, peer.client.torrentInfo.file_length % piece_length);
-						else
+							System.out.println("Requesting last piece");
+						}
+						else{
 							message = createRequest(piece_index, 0, peer.client.torrentInfo.piece_length);
+							System.out.println("Requesting regular piece");
+						}
 						peer.requestSendQueue.add(message);
 						// Rarest piece first
 						for (Peer peer1 : peer.client.neighboring_peers) {
@@ -258,12 +261,18 @@ public class Message {
 								message = createRequest(i, 0, peer.client.torrentInfo.piece_length);
 							// Rarest piece first
 							peer.requestSendQueue.add(message);
-							for (Peer peer1 : peer.client.neighboring_peers) {
-								if (peer.peerId.equals(peer1.peerId)) continue;
-								if (peer1.requestSendQueue.contains(message)) {
-									peer1.requestSendQueue.remove(message);
-									peer1.requestSendQueue.put(message);
+							try{
+								for (Peer peer1 : peer.client.neighboring_peers) {
+									if (peer.peerId.equals(peer1.peerId)) continue;
+	
+									if (peer1.requestSendQueue.contains(message)) {
+										peer1.requestSendQueue.remove(message);
+										peer1.requestSendQueue.put(message);
+									}
 								}
+							}
+							catch(Exception e){
+								System.err.println("EXCEPTION ERROR: " + e);
 							}
 						}
 					}
@@ -313,10 +322,25 @@ public class Message {
 						for (Peer peer1 : peer.client.neighboring_peers)
 							peer1.haveSendQueue.offer(createHave(piece_index), 2500, TimeUnit.MILLISECONDS);
 					} else {
+						System.out.println("Requesting piece again");
 						peer.requestSendQueue.put(createRequest(piece_index, block_offset, length));
 					}
 					break;
+				case 8: // CANCEL Message
+					piece_index = dis.readInt();
+					block_offset = dis.readInt();
+					block_length = dis.readInt();
+					int[] c_payload = {piece_index, block_offset};
+					for(Message m : peer.pieceSendQueue){
+						if(m.intPayload == c_payload){
+							System.out.println("Removed message from piece send queue after recv CANCEL");
+							peer.pieceSendQueue.remove(m);
+							break;
+						}	
+					}
 				default:
+					System.out.println("Received unexpected message from peer, disconnecting peer");
+					peer.shutdown();
 					break;
 			}
 		} catch(EOFException e) {

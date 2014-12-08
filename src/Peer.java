@@ -668,9 +668,13 @@ public class Peer extends Thread{
 			return;
 		}
 		//logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " + ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp)) + " ].");
-		/*System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer "
-				+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
-				+ " ].");*/
+		if(!message_types[message.message_id + 1].equals("HAVE")){
+			System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer "
+					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+					+ " ].");
+		}
+				
+		
 		try {
 			this.socketOutput.writeInt(message.length_prefix);
 			if (message.message_id != -1) {
@@ -701,20 +705,25 @@ public class Peer extends Thread{
 					this.socketOutput.writeByte(tempArray[i]);
 			}
 			this.socketOutput.flush();
-			this.client.bytesUploaded = this.client.bytesUploaded + message.length_prefix;
+			//this.client.bytesUploaded = this.client.bytesUploaded + message.length_prefix;
 			if (message.message_id == 7) {
 				this.peerSendArray[message.intPayload[0]]++;
 				// If the peer requests the same piece more than MAX_SEND_LIMIT, choke them
 				if (this.peerSendArray[message.intPayload[0]] > this.MAX_SEND_LIMIT) {
 					this.peerSendArray[message.intPayload[0]] = 0;
 					this.sendMessage(Message.createChoke());
-					this.client.bytesUploaded += message.bytePayload.length;
+					//this.client.bytesUploaded += message.bytePayload.length;
 					this.bytesToPeer += message.bytePayload.length;
 				}
 			}
 			this.bytes_sent += message.length_prefix;
-		this.clientLastMessage = System.currentTimeMillis();
-		this.peerLastMessage = System.currentTimeMillis();
+			this.clientLastMessage = System.currentTimeMillis();
+			this.peerLastMessage = System.currentTimeMillis();
+			if(message_types[message.message_id + 1].equals("PIECE")){
+				System.out.println("\nSENT A PIECE\n");
+				this.client.bytesUploaded += message.bytePayload.length;
+			}
+			
 		} catch (IOException e) {
 			System.out.println(e.toString());
 			logger.info("A problem occurrred while trying to send a {" + message_types[message.message_id + 1] + "} message to Peer " 

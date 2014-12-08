@@ -769,7 +769,7 @@ public class RUBTClient extends JFrame implements Runnable{
 	private static void startGui(RUBTClient rc){
 		Gui gui;
 		gui = new Gui(rc);
-		gui.setSize(450,450);
+		gui.setSize(460,450);
 		gui.setResizable(false);
 		gui.setVisible(true);
 		gui.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -860,11 +860,10 @@ public class RUBTClient extends JFrame implements Runnable{
 				}
 			}
 		}
-		
-		
-		// TODO get rid of this and doing it with the gui
-		public void pause() {
-			new Request(RUBTClient.this, "stopped");
-		}
 	}
+	
+	public void pause() {
+		new Request(RUBTClient.this, "stopped");
+	}
+
 }
