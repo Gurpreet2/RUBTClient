@@ -298,7 +298,7 @@ public class Peer extends Thread{
 	 * @param client
 	 * @throws IOException
 	 */
-	public Peer(String peer_id, String peer_ip, int peer_port, RUBTClient client) {
+	public Peer(String peer_id, String peer_ip, int peer_port, Socket socket, RUBTClient client) {
 		
 		//Initialize the new Peer object
 		this.client = client;
@@ -316,6 +316,11 @@ public class Peer extends Thread{
 		
 		// Set up the bitfield
 		this.clientBitfield = Message.createBitfield(client);
+		
+		if (this.peerId == null) {
+			this.isRandomPeer = true;
+			this.socket = socket;
+		}
 		
 		//Set up the text file for the logger.
 		/*if (logger.getHandlers().length == 0) { // Or would this not matter because logger has "static" and "final" modifier...
@@ -504,8 +509,9 @@ public class Peer extends Thread{
 					return;
 				}
 			} else {
-				logger.info("Incoming connection from IP : " + this.socket.getInetAddress().getHostAddress());
+				logger.info("Incoming connection from IP : [ " + this.peerIp + " ].");
 			}
+			if (this.socket == null) System.out.println("socket is null");
 			this.socketInput = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
 			this.socketOutput = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
 			logger.info("Connection established with Peer " 
