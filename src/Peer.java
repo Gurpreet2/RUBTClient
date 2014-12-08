@@ -59,11 +59,6 @@ public class Peer extends Thread{
 	boolean peerInterested = false;
 	
 	/**
-	 *  If the client is optimistically choking the peer.
-	 */
-	boolean optimisticChoke = false;
-	
-	/**
 	 *  The info hash in the metainfo file (also part five of the handshake message)
 	 */
 	byte[] infoHash;
@@ -167,16 +162,6 @@ public class Peer extends Thread{
 	 *  If sending a peer the same piece more times than this max, choke the connection
 	 */
 	final int MAX_SEND_LIMIT = 2;
-	
-	/**
-	 *  When the peer was choked.
-	 */
-	long lastTimeChoked;
-	
-	/**
-	 *  Amount of time a peer should be choked. (in milliseconds)
-	 */
-	final long MAX_CHOKE_INTERVAL = 5000;
 	
 	/**
 	 *  The upload limit of this peer, calculated from amount of pieces they've let us download.
@@ -343,6 +328,8 @@ public class Peer extends Thread{
 	 */
 	public void run() {
         	
+		this.client.numOfAttemptedConnections++;
+		
 			//while (!Thread.interrupted()){
 		    // If starting a new connection or restarting a connection...
 		    if (this.socketInput == null) this.connect();
@@ -357,7 +344,6 @@ public class Peer extends Thread{
 		    this.clientLastMessage = System.currentTimeMillis();
 		    this.peerLastMessage = System.currentTimeMillis();
 		    this.lastThrottleReset = System.currentTimeMillis();
-		    this.lastTimeChoked = System.currentTimeMillis();
 		    
 		    Timer timer = new Timer();
 		    TimerTask timerTask = new TimerTask() {
@@ -387,8 +373,10 @@ public class Peer extends Thread{
 	        	
 	        	// Reset throttle
 	        	if (System.currentTimeMillis() - this.lastThrottleReset > this.MAX_THROTTLE_INTERVAL) {
-	        		this.downloadRate = (this.downloadRate + this.bytes_received)/2;
-	        		this.uploadRate = (this.uploadRate + this.bytes_received)/2;
+	        		if (!this.amChoking) {
+	        			this.downloadRate = (this.downloadRate + this.bytes_received)/2;
+	        			this.uploadRate = (this.uploadRate + this.bytes_received)/2;
+	        		}
 	        		this.bytes_received = 0;
 	        		this.bytes_sent = 0;
 	        		this.lastThrottleReset = System.currentTimeMillis();
@@ -437,14 +425,14 @@ public class Peer extends Thread{
 	        	
 	        	//System.out.println("5");
 	        	// If I'm choking, clear the piece send queue
-	        	if (this.amChoking) {
+	        	/*if (this.amChoking) {
 	        		this.pieceSendQueue.clear();
 	        		if (System.currentTimeMillis() - this.lastTimeChoked > this.MAX_CHOKE_INTERVAL) {
 	        			this.sendMessage(Message.createUnchoke());
 	        		} else {
 	        			continue;
 	        		}
-	        	}
+	        	}*/
 	        	
 	        	//System.out.println("6");
 	        	// While peer is choking, wait until it is done choking
@@ -488,7 +476,11 @@ public class Peer extends Thread{
 	        logger.info("End of thread with Peer " 
 					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
 					+ " ].");
-			this.interrupt();
+	        
+	        this.client.numOfAttemptedConnections--;
+	        
+			//this.interrupt();
+	        return;
 	}
 	
 	/**
@@ -526,34 +518,23 @@ public class Peer extends Thread{
 	        }
 	        this.isActive = true;
 	        this.client.neighboring_peers.add(this);
+	        this.client.choked_peers.add(this);
 	        this.client.numOfActivePeers++;
 		} catch (ConnectException e) {
 			logger.info("Unsuccessful connection with Peer " 
 					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
 					+ " ]. UnknownHostException.");
-			if (this.socket == null) {
-				this.RUN = false;
-				return;
-			}
-			this.shutdown();
+			this.RUN = false;
 		} catch (UnknownHostException e) {
 			logger.info("Unsuccessful connection with Peer " 
 					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
 					+ " ]. UnknownHostException.");
-			if (this.socket == null) {
-				this.RUN = false;
-				return;
-			}
-			this.shutdown();
+			this.RUN = false;
 		} catch (IOException e) {
 			logger.info("Unsuccessful connection with Peer " 
 					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
 					+ " ]. IOException.");
-			if (this.socket == null) {
-				this.RUN = false;
-				return;
-			}
-			this.shutdown();
+			this.RUN = false;
 		}
 	}
 	
@@ -694,8 +675,18 @@ public class Peer extends Thread{
 			this.socketOutput.writeInt(message.length_prefix);
 			if (message.message_id != -1) {
 				this.socketOutput.writeByte(message.message_id);
-				if (message.message_id == 0) this.amChoking = true;
-				if (message.message_id == 1) this.amChoking = false;
+				if (message.message_id == 0) {
+					this.amChoking = true;
+					System.out.println("Started choking Peer "
+							+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+							+ " ].");
+				}
+				if (message.message_id == 1) {
+					this.amChoking = false;
+					System.out.println("Unchoked Peer "
+							+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+							+ " ].");
+				}
 				if (message.message_id == 2) this.amInterested = true;
 				if (message.message_id == 3) this.amInterested = false;
 			}
@@ -713,11 +704,10 @@ public class Peer extends Thread{
 			this.client.bytesUploaded = this.client.bytesUploaded + message.length_prefix;
 			if (message.message_id == 7) {
 				this.peerSendArray[message.intPayload[0]]++;
+				// If the peer requests the same piece more than MAX_SEND_LIMIT, choke them
 				if (this.peerSendArray[message.intPayload[0]] > this.MAX_SEND_LIMIT) {
 					this.peerSendArray[message.intPayload[0]] = 0;
 					this.sendMessage(Message.createChoke());
-					this.lastTimeChoked = System.currentTimeMillis();
-					this.optimisticChoke = true;
 					this.client.bytesUploaded += message.bytePayload.length;
 					this.bytesToPeer += message.bytePayload.length;
 				}
