@@ -108,6 +108,21 @@ public class RUBTClient extends JFrame implements Runnable{
 	volatile int numOfActivePeers = 0;
 	
 	/**
+	 *  Number of peers with which the client is trying to connect.
+	 */
+	volatile int numOfAttemptedConnections = 0;
+	
+	/**
+	 *  Maximum number of connections allowed.
+	 */
+	volatile int MAX_CONNECTIONS = 10;
+	
+	/**
+	 *  Amount of times a client should try to connect to a peer before giving up on the peer.
+	 */
+	volatile int MAX_CONNECTION_ATTEMPTS = 3;
+	
+	/**
 	 *  A boolean array indicating whether or not a piece has been downloaded. Will help for sending bitfield.
 	 */
 	volatile boolean[] havePieces;
@@ -128,16 +143,6 @@ public class RUBTClient extends JFrame implements Runnable{
 	static int announceTimerInterval = 180;
 	
 	/**
-	 *  Amount of times a client should try to connect to a peer before giving up on the peer.
-	 */
-	final int MAX_CONNECTION_ATTEMPTS = 3;
-	
-	/**
-	 *  Maximum number of connections allowed.
-	 */
-	final int MAX_CONNECTIONS = 10;
-	
-	/**
 	 *  Number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL by each peer.
 	 */
 	volatile int UPLOAD_LIMIT;
@@ -145,12 +150,12 @@ public class RUBTClient extends JFrame implements Runnable{
 	/**
 	 *  Maximum number of bytes that can be uploaded in interval MAX_THROTTLE_INTERVAL.
 	 */
-	final int MAX_UPLOAD_LIMIT = 130000;
+	volatile int MAX_UPLOAD_LIMIT = 130000;
 	
 	/**
 	 *  Upload limit cannot go lower than this.
 	 */
-	volatile int UPLOAD_LOWER_LIMIT;
+	volatile int UPLOAD_LOWER_LIMIT = 33000;
 	
 	/**
 	 *  Number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL by each peer.
@@ -160,12 +165,12 @@ public class RUBTClient extends JFrame implements Runnable{
 	/**
 	 *  Maximum number of bytes that can be downloaded in interval MAX_THROTTLE_INTERVAL.
 	 */
-	final int MAX_DOWNLOAD_LIMIT = 390000;
+	volatile int MAX_DOWNLOAD_LIMIT = 390000;
 	
 	/**
 	 *  Download limit cannot go lower than this.
 	 */
-	int DOWNLOAD_LOWER_LIMIT = 35000;
+	int DOWNLOAD_LOWER_LIMIT = 33000;
 	
 	/**
 	 *  If the client is seeding.
@@ -176,6 +181,32 @@ public class RUBTClient extends JFrame implements Runnable{
 	 *  How far along the download is.
 	 */
 	int percentComplete;
+	
+	/* For optimistic choke/unchoke */
+	/**
+	 *  Interval for which a client should be optimistically unchoked/unchoked. (in milliseconds)
+	 */
+	final long CHOKING_INTERVAL = 15000;
+	
+	/**
+	 *  Number of choked peers.
+	 */
+	volatile int numOfUnchokedPeers;
+	
+	/**
+	 *  Maximum number of unchoked peers.
+	 */
+	volatile int MAX_UNCHOKED_PEERS = 2;
+	
+	/**
+	 *  Peers that are being choked.
+	 */
+	volatile ArrayList<Peer> choked_peers = new ArrayList<Peer>(10);
+	
+	/**
+	 *  Peers that are unchoked. For efficiency.
+	 */
+	volatile ArrayList<Peer> unchoked_peers = new ArrayList<Peer>(10);
 
 	/**
 	 *  Value that is true while file is downloading, false when file finishes downloading.
@@ -268,7 +299,7 @@ public class RUBTClient extends JFrame implements Runnable{
 	        client.peers = MyTools.createPeerList(client, peer_map);
 	        // Start connecting to and messaging peers
 	        for (Peer peer : client.peers) {
-				if (client.numOfActivePeers < client.MAX_CONNECTIONS) {
+				if (client.numOfAttemptedConnections < client.MAX_CONNECTIONS) {
 					//if(peer.peerIp.startsWith("128.6.171.")){ //TODO: Allow all peers
 
 					if(client.onlyPeer != null && peer.peerIp.equals(client.onlyPeer) && !peer.peerId.equals(client.clientId)){
@@ -343,7 +374,7 @@ public class RUBTClient extends JFrame implements Runnable{
 					ArrayList<Map<ByteBuffer, Object>> peer_map = RUBTClient.this.response2.get_peer_map();
 			        ArrayList<Peer> peers = MyTools.createPeerList(RUBTClient.this, peer_map);
 			        for (Peer peer : peers) {
-			        	if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS 
+			        	if (RUBTClient.this.numOfAttemptedConnections < RUBTClient.this.MAX_CONNECTIONS 
 			        			&& !RUBTClient.this.neighboring_peers.contains(peer) 
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
 			        		System.out.println("Added peer");
@@ -367,7 +398,54 @@ public class RUBTClient extends JFrame implements Runnable{
 				}
 			}
 		};
-		timer.schedule(timerTask, RUBTClient.announceTimerInterval*1000, RUBTClient.announceTimerInterval*1000);
+		if (!this.amSeeding) timer.schedule(timerTask, RUBTClient.announceTimerInterval*1000, RUBTClient.announceTimerInterval*1000);
+        
+        TimerTask timerTask2 = new TimerTask() {
+        	
+        	public void run() {
+        		
+        		Peer peer1 = null, peer2 = null;
+        		
+        		for (Peer peer : RUBTClient.this.choked_peers) {
+        			if (peer.peerInterested && RUBTClient.this.numOfUnchokedPeers < RUBTClient.this.MAX_UNCHOKED_PEERS) {
+        				peer.sendMessage(Message.createUnchoke());
+        				RUBTClient.this.choked_peers.remove(peer);
+        				RUBTClient.this.unchoked_peers.add(peer);
+        			}
+        			if (peer1 == null) 
+        				peer1 = peer;
+        			else
+        				peer1 = (peer1.uploadRate > peer.uploadRate) ? peer1 : peer;
+        		}
+        		
+        		for (Peer peer : RUBTClient.this.unchoked_peers) {
+        			if (peer.requestSendQueue.isEmpty()) {
+	        			if (peer2 == null) 
+	        				peer2 = peer;
+	        			else
+	        				peer2 = (peer2.uploadRate < peer.uploadRate) ? peer2 : peer;
+        			}
+        		}
+        		
+        		if (peer2 != null) {
+        			
+					RUBTClient.this.unchoked_peers.remove(peer2);
+					RUBTClient.this.choked_peers.add(peer2);
+					peer2.sendMessage(Message.createChoke());
+					RUBTClient.this.numOfUnchokedPeers--;
+					
+					
+	        		if (peer1 != null && RUBTClient.this.numOfUnchokedPeers < RUBTClient.this.MAX_UNCHOKED_PEERS) {
+						RUBTClient.this.choked_peers.remove(peer1);
+						RUBTClient.this.unchoked_peers.add(peer1);
+						peer1.sendMessage(Message.createUnchoke());
+						RUBTClient.this.numOfUnchokedPeers++;
+						
+	        		}
+        		}
+        	}
+        };
+        timer.schedule(timerTask2, this.CHOKING_INTERVAL, this.CHOKING_INTERVAL);
 		
 		int numOfActivePeers = this.numOfActivePeers;
 		int percentComplete;
@@ -396,7 +474,7 @@ public class RUBTClient extends JFrame implements Runnable{
 			}
 				
 			// Prints how far along the download is, whenever the download progresses.
-			if (this.numOfHavePieces != this.numOfPieces) {
+			if (!this.amSeeding) {
 				if (percentComplete != this.percentComplete) {
 					System.out.println("Download is " + this.percentComplete + "% complete.");
 					percentComplete = this.percentComplete;
@@ -406,10 +484,13 @@ public class RUBTClient extends JFrame implements Runnable{
 						logger.info("Seeding...");
 					}
 				}
+				if (percentComplete == 100) {
+					this.amSeeding = true;
+					timer.cancel();
+				}
 			}
 		}
 		
-		timer.cancel();
 	}
 	
 	
@@ -461,7 +542,7 @@ public class RUBTClient extends JFrame implements Runnable{
 					System.out.println("ACCEPTED A NEW PEER!!!!!!!!");
 					Peer peer = new Peer(null, peerSocket.getInetAddress().getHostAddress(), Request.port, peerSocket, RUBTClient.this);
 					RUBTClient.this.peers.add(peer);
-					if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
+					if (RUBTClient.this.numOfAttemptedConnections < RUBTClient.this.MAX_CONNECTIONS){
 						new Thread(peer).start();
 					}
 				}
