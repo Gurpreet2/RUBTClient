@@ -263,12 +263,10 @@ public class RUBTClient extends JFrame implements Runnable{
 
 					if(client.onlyPeer != null && peer.peerIp.equals(client.onlyPeer) && !peer.peerId.equals(client.clientId)){
 						System.out.println("PEER ID: " + peer.peerId + " CLIENT ID: " + client.clientId);
-						client.neighboring_peers.add(peer);
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 		    			peer.start();
 					}
 					else if(client.onlyPeer == null){
-						client.neighboring_peers.add(peer);
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 		    			peer.start();
 					//}
@@ -338,7 +336,6 @@ public class RUBTClient extends JFrame implements Runnable{
 			        	if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS 
 			        			&& !RUBTClient.this.neighboring_peers.contains(peer) 
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
-			        		RUBTClient.this.neighboring_peers.add(peer);
 			        		System.out.println("Added peer");
 			        		
 			        		RUBTClient.this.peers.add(peer);
@@ -353,7 +350,6 @@ public class RUBTClient extends JFrame implements Runnable{
 			        			&& (peer.peerIp != null ? !RUBTClient.this.neighboring_peers.contains(peer) : true) // Adjusted for incoming peer connections
 			        			// In case I add something later on that puts peers in bad_peers even when connectionAttempts < MAX_CONNECTION_ATTEMPTS
 			        			&& !RUBTClient.this.bad_peers.contains(peer.peerIp)) {
-			        		RUBTClient.this.neighboring_peers.add(peer);
 			        		System.out.println("Starting NEW thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 			    			peer.start();
 			        	}
