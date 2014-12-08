@@ -99,6 +99,11 @@ public class Peer extends Thread{
 	int peerHaveArraySize = 0;
 	
 	/**
+	 *  Percentage of the file that the peer has.
+	 */
+	int percentPeerHas = 0;
+	
+	/**
 	 *  The bitfield of the pieces the client has, will be sent to each peer after handshake.
 	 */
 	Message clientBitfield;
@@ -252,7 +257,7 @@ public class Peer extends Thread{
 	/**
 	 *  How long the client should try to connect to a peer before giving up. (in milliseconds)
 	 */
-	final int CONNECTION_TIMEOUT = 3000;
+	final int CONNECTION_TIMEOUT = 10000;
 	
 	/**
 	 *  An attempt was made to connect to this peer.
