@@ -84,7 +84,7 @@ public class Peer extends Thread{
 	boolean sentGreetings = false;
 	
 	/**
-	 *  The pieces that the client has.
+	 *  The pieces that the peer has. (This is the bitfield for badTorrentControllers, also used for rarest pieece first)
 	 */
 	boolean[] peerHaveArray;
 	
