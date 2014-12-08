@@ -104,7 +104,7 @@ public class MyTools {
             peer_ip = new String(byteBuffer.array());
        
             peer_port =  (Integer) peer_map.get(i).get(ByteBuffer.wrap(new byte[] { 'p', 'o', 'r', 't' })); 
-            p = new Peer(peer_id, peer_ip, peer_port, client);
+            p = new Peer(peer_id, peer_ip, peer_port, null, client);
             peers.add(p);
         }
 		return peers;
