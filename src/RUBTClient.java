@@ -186,7 +186,7 @@ public class RUBTClient extends JFrame implements Runnable{
 	/**
 	 *  Interval for which a client should be optimistically unchoked/unchoked. (in milliseconds)
 	 */
-	final long CHOKING_INTERVAL = 15000;
+	final long CHOKING_INTERVAL = 30000;
 	
 	/**
 	 *  Number of choked peers.
@@ -400,48 +400,278 @@ public class RUBTClient extends JFrame implements Runnable{
 		};
 		if (!this.amSeeding) timer.schedule(timerTask, RUBTClient.announceTimerInterval*1000, RUBTClient.announceTimerInterval*1000);
         
+		// Optimistic choking/unchoking (A very, VERY complicated implementation)
+		// According to BitTorrent Specification, 4 is a good number
         TimerTask timerTask2 = new TimerTask() {
         	
         	public void run() {
         		
-        		Peer peer1 = null, peer2 = null;
+        		//First of all, if one of the lists is empty, just exit
+        		if (RUBTClient.this.choked_peers.isEmpty() || RUBTClient.this.unchoked_peers.isEmpty()) {
+        			System.out.println("Can't optimistically choke/unchoke, one of the lists is empty");
+        			return;
+        		}
         		
+        		Peer peer1 = null, peer2 = null, peer3 = null, peer4 = null, peer5 = null, peer6 = null, peer7 = null, peer8 = null;
+        		
+        		// Find the peers with the previous highest upload rates that are choked, peer1 highest upload rate, peer4 4th higehest
         		for (Peer peer : RUBTClient.this.choked_peers) {
-        			if (peer.peerInterested && RUBTClient.this.numOfUnchokedPeers < RUBTClient.this.MAX_UNCHOKED_PEERS) {
-        				peer.sendMessage(Message.createUnchoke());
-        				RUBTClient.this.choked_peers.remove(peer);
-        				RUBTClient.this.unchoked_peers.add(peer);
-        			}
         			if (peer1 == null) 
         				peer1 = peer;
-        			else
+        			else {
+            			if (peer2 == null) {
+            				if (peer1.uploadRate > peer.uploadRate) {
+            					peer2 = peer;
+            				} else {
+            					peer2 = peer1;
+            					peer1 = peer;
+            				}
+            			} else {
+                			if (peer3 == null) { 
+                				if (peer1.uploadRate > peer.uploadRate) {
+                					if (peer2.uploadRate > peer.uploadRate) {
+                						peer3 = peer;
+                					} else {
+                						peer3 = peer2;
+                						peer2 = peer;
+                					}
+                				} else {
+                					peer3 = peer2;
+                					peer2 = peer1;
+                					peer1 = peer;
+                				}
+                				
+                			}
+                			else {
+                				if (peer4 == null) { 
+                    				if (peer1.uploadRate > peer.uploadRate) {
+                    					if (peer2.uploadRate > peer.uploadRate) {
+                    						if (peer3.uploadRate > peer.uploadRate) {
+                    							peer4 = peer;
+                    						} else {
+                    							peer4 = peer3;
+                    							peer3 = peer;
+                    						}
+                    					} else {
+                    						peer4 = peer3;
+                    						peer3 = peer2;
+                    						peer2 = peer;
+                    					}
+                    				} else {
+                    					peer4 = peer3;
+                    					peer3 = peer2;
+                    					peer2 = peer1;
+                    					peer1 = peer;
+                    				}
+                    			}
+                    			else {
+                    				if (peer1.uploadRate > peer.uploadRate) {
+                    					if (peer2.uploadRate > peer.uploadRate) {
+                    						if (peer3.uploadRate > peer.uploadRate) {
+                    							if (peer4.uploadRate < peer.uploadRate)
+                    								peer4 = peer;
+                    						} else {
+                    							peer4 = peer3;
+                    							peer3 = peer;
+                    						}
+                    					} else {
+                    						peer4 = peer3;
+                    						peer3 = peer2;
+                    						peer2 = peer;
+                    					}
+                    				} else {
+                						peer4 = peer3;
+                						peer3 = peer2;
+                						peer2 = peer1;
+                						peer1 = peer;
+                    				}
+                    			}
+                    			if (peer1.uploadRate > peer.uploadRate) {
+                    				if (peer2.uploadRate > peer.uploadRate) {
+                    					if (peer3.uploadRate < peer.uploadRate)
+                    						peer3 = peer;
+                    				} else {
+                    					peer3 = peer2;
+                    					peer2 = peer;
+                    				}
+                    			} else {
+                    				peer3 = peer2;
+                    				peer2 = peer1;
+                    				peer1 = peer;
+                    			}
+                			}
+                			if (peer1.uploadRate > peer.uploadRate) {
+                				if (peer2.uploadRate < peer.uploadRate)
+                					peer2 = peer;
+                			} else {
+                				peer2 = peer1;
+                				peer1 = peer;
+                			}
+            			}
         				peer1 = (peer1.uploadRate > peer.uploadRate) ? peer1 : peer;
-        		}
-        		
-        		for (Peer peer : RUBTClient.this.unchoked_peers) {
-        			if (peer.requestSendQueue.isEmpty()) {
-	        			if (peer2 == null) 
-	        				peer2 = peer;
-	        			else
-	        				peer2 = (peer2.uploadRate < peer.uploadRate) ? peer2 : peer;
         			}
         		}
         		
+        		// Finds the peers with the smallest upload rates that are unchoked, peer8 smallest upload rate, peer5 4th smallest
+        		for (Peer peer : RUBTClient.this.unchoked_peers) {
+        			if (peer.requestSendQueue.isEmpty()) {
+        				if (peer8 == null) 
+            				peer8 = peer;
+            			else {
+                			if (peer7 == null) {
+                				if (peer8.uploadRate < peer.uploadRate) {
+                					peer7 = peer;
+                				} else {
+                					peer7 = peer8;
+                					peer8 = peer;
+                				}
+                			} else {
+                    			if (peer6 == null) { 
+                    				if (peer8.uploadRate < peer.uploadRate) {
+                    					if (peer7.uploadRate < peer.uploadRate) {
+                    						peer6 = peer;
+                    					} else {
+                    						peer6 = peer7;
+                    						peer7 = peer;
+                    					}
+                    				} else {
+                    					peer6 = peer7;
+                    					peer7 = peer8;
+                    					peer8 = peer;
+                    				}
+                    				
+                    			}
+                    			else {
+                    				if (peer5 == null) { 
+                        				if (peer8.uploadRate < peer.uploadRate) {
+                        					if (peer7.uploadRate < peer.uploadRate) {
+                        						if (peer6.uploadRate < peer.uploadRate) {
+                        							peer5 = peer;
+                        						} else {
+                        							peer5 = peer6;
+                        							peer6 = peer;
+                        						}
+                        					} else {
+                        						peer5 = peer6;
+                        						peer6 = peer7;
+                        						peer7 = peer;
+                        					}
+                        				} else {
+                        					peer5 = peer6;
+                        					peer6 = peer7;
+                        					peer7 = peer8;
+                        					peer8 = peer;
+                        				}
+                        			}
+                        			else {
+                        				if (peer8.uploadRate < peer.uploadRate) {
+                        					if (peer7.uploadRate < peer.uploadRate) {
+                        						if (peer6.uploadRate < peer.uploadRate) {
+                        							if (peer5.uploadRate > peer.uploadRate)
+                        								peer5 = peer;
+                        						} else {
+                        							peer5 = peer6;
+                        							peer6 = peer;
+                        						}
+                        					} else {
+                        						peer5 = peer6;
+                        						peer6 = peer7;
+                        						peer7 = peer;
+                        					}
+                        				} else {
+                    						peer5 = peer6;
+                    						peer6 = peer7;
+                    						peer7 = peer8;
+                    						peer8 = peer;
+                        				}
+                        			}
+                        			if (peer8.uploadRate < peer.uploadRate) {
+                        				if (peer7.uploadRate < peer.uploadRate) {
+                        					if (peer6.uploadRate > peer.uploadRate)
+                        						peer6 = peer;
+                        				} else {
+                        					peer6 = peer7;
+                        					peer7 = peer;
+                        				}
+                        			} else {
+                        				peer6 = peer7;
+                        				peer7 = peer8;
+                        				peer8 = peer;
+                        			}
+                    			}
+                    			if (peer8.uploadRate < peer.uploadRate) {
+                    				if (peer7.uploadRate > peer.uploadRate)
+                    					peer7 = peer;
+                    			} else {
+                    				peer7 = peer8;
+                    				peer8 = peer;
+                    			}
+                			}
+            				peer8 = (peer8.uploadRate > peer.uploadRate) ? peer8 : peer;
+            			}
+        			}
+        		}
+        		
+        		// Switch out the peers, choke one then unchoke the other
+        		if (peer1 != null) {
+        			if (peer8 != null) if (!peer8.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer8, peer1);
+						peer8 = null;
+        			} else if (peer7 != null) if (!peer7.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer7, peer1);
+						peer7 = null;
+        			} else if (peer6 != null) if (!peer6.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer6, peer1);
+						peer6 = null;
+        			} else if (peer5 != null) if (!peer5.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer5, peer1);
+						peer5 = null;
+        			}
+        		}
         		if (peer2 != null) {
-        			
-					RUBTClient.this.unchoked_peers.remove(peer2);
-					RUBTClient.this.choked_peers.add(peer2);
-					peer2.sendMessage(Message.createChoke());
-					RUBTClient.this.numOfUnchokedPeers--;
-					
-					
-	        		if (peer1 != null && RUBTClient.this.numOfUnchokedPeers < RUBTClient.this.MAX_UNCHOKED_PEERS) {
-						RUBTClient.this.choked_peers.remove(peer1);
-						RUBTClient.this.unchoked_peers.add(peer1);
-						peer1.sendMessage(Message.createUnchoke());
-						RUBTClient.this.numOfUnchokedPeers++;
-						
-	        		}
+        			if (peer8 != null) if (!peer8.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer8, peer2);
+						peer8 = null;
+        			} else if (peer7 != null) if (!peer7.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer7, peer2);
+						peer7 = null;
+        			} else if (peer6 != null) if (!peer6.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer6, peer2);
+						peer6 = null;
+        			} else if (peer5 != null) if (!peer5.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer5, peer2);
+						peer5 = null;
+        			}
+        		}
+        		if (peer3 != null) {
+        			if (peer8 != null) if (!peer8.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer8, peer3);
+						peer8 = null;
+        			} else if (peer7 != null) if (!peer7.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer7, peer3);
+						peer7 = null;
+        			} else if (peer6 != null) if (!peer6.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer6, peer3);
+						peer6 = null;
+        			} else if (peer5 != null) if (!peer5.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer5, peer3);
+						peer5 = null;
+        			}
+        		}
+        		if (peer4 != null) {
+        			if (peer8 != null) if (!peer8.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer8, peer4);
+						peer8 = null;
+        			} else if (peer7 != null) if (!peer7.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer7, peer4);
+						peer7 = null;
+        			} else if (peer6 != null) if (!peer6.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer6, peer4);
+						peer6 = null;
+        			} else if (peer5 != null) if (!peer5.amInterested) {
+        				chokeUnchoke(RUBTClient.this, peer5, peer4);
+						peer5 = null;
+        			}
         		}
         	}
         };
@@ -491,6 +721,23 @@ public class RUBTClient extends JFrame implements Runnable{
 			}
 		}
 		
+	}
+	
+	
+	/**
+	 *  To make code a little shorter for optimistic choke/unchoke
+	 */
+	public void chokeUnchoke(RUBTClient client, Peer peerChoke, Peer peerUnchoke) {
+		
+		client.unchoked_peers.remove(peerChoke);
+		client.choked_peers.add(peerChoke);
+		peerChoke.sendMessage(Message.createChoke());
+		client.numOfUnchokedPeers--;
+		
+		client.choked_peers.remove(peerUnchoke);
+		client.unchoked_peers.add(peerUnchoke);
+		peerUnchoke.sendMessage(Message.createUnchoke());
+		client.numOfUnchokedPeers++;
 	}
 	
 	
