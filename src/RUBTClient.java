@@ -253,20 +253,32 @@ public class RUBTClient extends JFrame implements Runnable{
         ir.start();
         
         // Put peer_map into a peer array so it can be more easily used and read, also start the threads for each peer
-        if (args.length == 2) {
+        //if (args.length == 2) {
 	        ArrayList<Map<ByteBuffer, Object>> peer_map = client.response1.get_peer_map();
 	        client.peers = MyTools.createPeerList(client, peer_map);
 	        // Start connecting to and messaging peers
 	        for (Peer peer : client.peers) {
 				if (client.numOfActivePeers < client.MAX_CONNECTIONS) {
 					//if(peer.peerIp.startsWith("128.6.171.")){ //TODO: Allow all peers
+
+					if(client.onlyPeer != null && peer.peerIp.equals(client.onlyPeer) && !peer.peerId.equals(client.clientId)){
+						System.out.println("PEER ID: " + peer.peerId + " CLIENT ID: " + client.clientId);
+						client.neighboring_peers.add(peer);
+		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
+		    			peer.start();
+					}
+					else if(client.onlyPeer == null){
+						client.neighboring_peers.add(peer);
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
 		    			peer.start();
 					//}
-	    		} else
+					}
+				}
+				else{
 	    			logger.info("Unable to connect with Peer ID : [ " + peer.peerId + " ]. Maximum number of connections reached.");
+				}
 	        }
-        } else {
+       /* } else {
         	int port, count = 0;
         	do {
         		port = MyTools.findPort(client.onlyPeer);
@@ -279,16 +291,20 @@ public class RUBTClient extends JFrame implements Runnable{
         	}
         	System.out.println("Added peer");
         	client.peers.add(new Peer(null, client.onlyPeer, port, client));
+<<<<<<< Updated upstream
         }
+=======
+        }*/
+        //client.peers.get(0).start();
         
         // Thread start for client
         new Thread(client).start();
         startGui(client);
         
-		if (client.onlyPeer == null) {
-			PeerListener peerListener = client.new PeerListener();
+		//if (client.onlyPeer == null) {
+			PeerListener peerListener = client.new PeerListener(client.onlyPeer);
 			peerListener.runPeerListener();
-		}
+		//}
 	}
 
 
@@ -298,7 +314,7 @@ public class RUBTClient extends JFrame implements Runnable{
 	 */
 	public void run() {
 		
-        logger.info("Started thread for client.");
+        logger.info("Started thread for client. Our peer ID: " + this.clientId);
 		// Setup a timer to send periodic announcements to the tracker.
 		Timer timer = new Timer();
 		TimerTask timerTask = new TimerTask() {
@@ -418,7 +434,13 @@ public class RUBTClient extends JFrame implements Runnable{
 	 */
 	class PeerListener extends Thread {
 		
+		String onlyPeer = null;
+		
 		public PeerListener() {
+		}
+		
+		public PeerListener(String onlyPeer){
+			this.onlyPeer = onlyPeer;
 		}
 		
 		public void runPeerListener() {
@@ -442,9 +464,25 @@ public class RUBTClient extends JFrame implements Runnable{
 		public void newPeer(Socket socket) {
 			
 			Peer peer = new Peer(null, socket.getInetAddress().getHostAddress(), socket.getPort(), RUBTClient.this);
-			RUBTClient.this.peers.add(peer);
-			if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS)
-				peer.start();
+
+			if(this.onlyPeer != null){
+				if(peer.peerIp.equals(this.onlyPeer)){
+					System.out.println("equals");
+					RUBTClient.this.peers.add(peer);
+					if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
+						peer.start();
+					}
+				}
+				else{
+					System.out.println("Refused connection from " + peer.peerIp);
+				}
+			}
+			else{
+				RUBTClient.this.peers.add(peer);
+				if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
+					peer.start();
+				}
+			}
 		}
 	}
 	

@@ -308,147 +308,147 @@ public class Peer extends Thread{
 	 */
 	public void run() {
         	
-			//while (!Thread.interrupted()){
-	        // If starting a new connection or restarting a connection...
-	       	if (this.socketInput == null) this.connect();
-	       	
-	       	
-	       	// Send bitfield
-	        if (!this.sentBitfield && this.clientBitfield != null) {
-	        	this.sendMessage(this.clientBitfield);
-	        	this.sentBitfield = true;
-	        }
-	        
-	        this.clientLastMessage = System.currentTimeMillis();
-	        this.peerLastMessage = System.currentTimeMillis();
-	        this.lastThrottleReset = System.currentTimeMillis();
-	        this.lastTimeChoked = System.currentTimeMillis();
-	        
-	        Timer timer = new Timer();
-	        TimerTask timerTask = new TimerTask() {
-	        	
-	        	// Again, leaving the Peer.this in for clarification
-	        	public void run() {
-	        		
-	    			// Send keep alives to peers
-	    			if (System.currentTimeMillis() - Peer.this.clientLastMessage > Peer.this.MAX_KEEPALIVE_INTERVAL)
-	    				if (Peer.this.amInterested) {
-	    					Peer.this.sendMessage(Message.createKeepAlive());
-	    					Peer.this.clientLastMessage = System.currentTimeMillis();
-	    					Peer.this.peerLastMessage = System.currentTimeMillis();
-	    				}
-	    			
-	    			// Check if the peer wants to keep the connection open
-	    			if (System.currentTimeMillis() - Peer.this.peerLastMessage > Peer.this.MAX_KEEPALIVE_INTERVAL + 25000) {
-	    				Peer.this.shutdown();
-	    			}
-	    			
-	    			Peer.this.canQuit = true;
-	    		}
-	       	};
-	        timer.schedule(timerTask, this.MAX_KEEPALIVE_INTERVAL, this.MAX_KEEPALIVE_INTERVAL);
-	        
-	        while (this.RUN) {
-	        	
-	        	// Reset throttle
-	        	if (System.currentTimeMillis() - this.lastThrottleReset > this.MAX_THROTTLE_INTERVAL) {
-	        		this.pieces_received = 0;
-	        		this.pieces_sent = 0;
-	        		this.lastThrottleReset = System.currentTimeMillis();
-	        	}
-	        	
-	        	//System.out.println("1");
-	        	// Set the upload rate
-	        	if (this.downloadedFromPeer != 0)
-	        		this.peer_upload_base = (int)(((double)this.downloadedFromPeer / this.wantFromPeer)*this.client.UPLOAD_LIMIT) + this.PEER_UPLOAD_LOWER_LIMIT;
-	        	else
-	        		this.peer_upload_base = this.PEER_UPLOAD_LOWER_LIMIT;
-	        	
-	        	//System.out.println("2");
-	        	// Read the incoming message if within throttle
-	        	if (this.pieces_received < this.client.DOWNLOAD_LIMIT) {
-					try {
-						Message.dealWithMessage(this);
-					} catch (IOException e) {
-						logger.info("IO exception (in peer class, dealWithMessage()) from Peer "
-								+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
-								+ " ].");
-						this.shutdown();
-					}
-	        	}
-	        	
-	        	//System.out.println("3");
-	        	// Reset throttle
-	        	if (System.currentTimeMillis() - this.lastThrottleReset > this.MAX_THROTTLE_INTERVAL) {
-	        		this.pieces_received = 0;
-	        		this.pieces_sent = 0;
-	        		this.lastThrottleReset = System.currentTimeMillis();
-	        	}
-	        	
-	        	//System.out.println("4");
-	        	// If I'm choking, clear the piece send queue
-	        	if (this.amChoking) {
-	        		this.pieceSendQueue.clear();
-	        		if (System.currentTimeMillis() - this.lastTimeChoked > this.MAX_CHOKE_INTERVAL) {
-	        			this.sendMessage(Message.createUnchoke());
-	        		} else {
-	        			continue;
-	        		}
-	        	}
-	        	
-	        	//System.out.println("5");
-	        	// While peer is choking, wait until it is done choking
-				if (this.peerChoking) {
-					continue;
-				}
-				
-				//System.out.println("6");
-				// Send requests to the peer, MAX_REQUESTS out at one time
-				while (!this.amChoking && !this.peerChoking && this.requestsSent < this.MAX_REQUESTS && !this.requestSendQueue.isEmpty()) {
-					Message message = this.requestSendQueue.poll();
-					if (!this.requestedQueue.contains(message)) this.requestedQueue.add(message);
-					this.sendMessage(message);
-					this.requestsSent++;
-				}
-				
-				//System.out.println("7");
-				// Send pieces from requests
-				while (!this.amChoking && !this.peerChoking && this.pieces_sent < this.peer_upload_base && !this.pieceSendQueue.isEmpty()) {
-					try {
-						this.sendMessage(this.pieceSendQueue.take());
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-				
-				//System.out.println("8");
-				// Send have messages
-				while (!this.amChoking && !this.peerChoking && !this.haveSendQueue.isEmpty()) {
-					try {
-						this.sendMessage(this.haveSendQueue.take());
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-				
-				//System.out.println("9");
-				// If have all pieces, send uninterested, and if neither client not peer are interested in each other then close the connection
-				if (this.canQuit && this.requestSendQueue.isEmpty() && this.requestedQueue.isEmpty()) {
-					logger.info("All pieces downloaded from Peer " 
+		//while (!Thread.interrupted()){
+        // If starting a new connection or restarting a connection...
+       	if (this.socketInput == null) this.connect();
+       	
+       	
+       	// Send bitfield
+        if (!this.sentBitfield && this.clientBitfield != null) {
+        	this.sendMessage(this.clientBitfield);
+        	this.sentBitfield = true;
+        }
+        
+        this.clientLastMessage = System.currentTimeMillis();
+        this.peerLastMessage = System.currentTimeMillis();
+        this.lastThrottleReset = System.currentTimeMillis();
+        this.lastTimeChoked = System.currentTimeMillis();
+        
+        Timer timer = new Timer();
+        TimerTask timerTask = new TimerTask() {
+        	
+        	// Again, leaving the Peer.this in for clarification
+        	public void run() {
+        		
+    			// Send keep alives to peers
+    			if (System.currentTimeMillis() - Peer.this.clientLastMessage > Peer.this.MAX_KEEPALIVE_INTERVAL)
+    				if (Peer.this.amInterested) {
+    					Peer.this.sendMessage(Message.createKeepAlive());
+    					Peer.this.clientLastMessage = System.currentTimeMillis();
+    					Peer.this.peerLastMessage = System.currentTimeMillis();
+    				}
+    			
+    			// Check if the peer wants to keep the connection open
+    			if (System.currentTimeMillis() - Peer.this.peerLastMessage > Peer.this.MAX_KEEPALIVE_INTERVAL + 25000) {
+    				Peer.this.shutdown();
+    			}
+    			
+    			Peer.this.canQuit = true;
+    		}
+       	};
+        timer.schedule(timerTask, this.MAX_KEEPALIVE_INTERVAL, this.MAX_KEEPALIVE_INTERVAL);
+        
+        while (this.RUN) {
+        	
+        	// Reset throttle
+        	if (System.currentTimeMillis() - this.lastThrottleReset > this.MAX_THROTTLE_INTERVAL) {
+        		this.pieces_received = 0;
+        		this.pieces_sent = 0;
+        		this.lastThrottleReset = System.currentTimeMillis();
+        	}
+        	
+        	//System.out.println("1");
+        	// Set the upload rate
+        	if (this.downloadedFromPeer != 0)
+        		this.peer_upload_base = (int)(((double)this.downloadedFromPeer / this.wantFromPeer)*this.client.UPLOAD_LIMIT) + this.PEER_UPLOAD_LOWER_LIMIT;
+        	else
+        		this.peer_upload_base = this.PEER_UPLOAD_LOWER_LIMIT;
+        	
+        	//System.out.println("2");
+        	// Read the incoming message if within throttle
+        	if (this.pieces_received < this.client.DOWNLOAD_LIMIT) {
+				try {
+					Message.dealWithMessage(this);
+				} catch (IOException e) {
+					logger.info("IO exception (in peer class, dealWithMessage()) from Peer "
 							+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
 							+ " ].");
-					if (!this.client.amSeeding) this.sendMessage(Message.createNotInterested());
-					if (!this.peerInterested) this.shutdown();
+					this.shutdown();
 				}
-					
-	        }
-	        
-	        timer.cancel();
-	        
-	        logger.info("End of thread with Peer " 
-					+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
-					+ " ].");
-			//}
+        	}
+        	
+        	//System.out.println("3");
+        	// Reset throttle
+        	if (System.currentTimeMillis() - this.lastThrottleReset > this.MAX_THROTTLE_INTERVAL) {
+        		this.pieces_received = 0;
+        		this.pieces_sent = 0;
+        		this.lastThrottleReset = System.currentTimeMillis();
+        	}
+        	
+        	//System.out.println("4");
+        	// If I'm choking, clear the piece send queue
+        	if (this.amChoking) {
+        		this.pieceSendQueue.clear();
+        		if (System.currentTimeMillis() - this.lastTimeChoked > this.MAX_CHOKE_INTERVAL) {
+        			this.sendMessage(Message.createUnchoke());
+        		} else {
+        			continue;
+        		}
+        	}
+        	
+        	//System.out.println("5");
+        	// While peer is choking, wait until it is done choking
+			if (this.peerChoking) {
+				continue;
+			}
+			
+			//System.out.println("6");
+			// Send requests to the peer, MAX_REQUESTS out at one time
+			while (!this.amChoking && !this.peerChoking && this.requestsSent < this.MAX_REQUESTS && !this.requestSendQueue.isEmpty()) {
+				Message message = this.requestSendQueue.poll();
+				if (!this.requestedQueue.contains(message)) this.requestedQueue.add(message);
+				this.sendMessage(message);
+				this.requestsSent++;
+			}
+			
+			//System.out.println("7");
+			// Send pieces from requests
+			while (!this.amChoking && !this.peerChoking && this.pieces_sent < this.peer_upload_base && !this.pieceSendQueue.isEmpty()) {
+				try {
+					this.sendMessage(this.pieceSendQueue.take());
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			
+			//System.out.println("8");
+			// Send have messages
+			while (!this.amChoking && !this.peerChoking && !this.haveSendQueue.isEmpty()) {
+				try {
+					this.sendMessage(this.haveSendQueue.take());
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			
+			//System.out.println("9");
+			// If have all pieces, send uninterested, and if neither client not peer are interested in each other then close the connection
+			if (this.canQuit && this.requestSendQueue.isEmpty() && this.requestedQueue.isEmpty()) {
+				logger.info("All pieces downloaded from Peer " 
+						+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+						+ " ].");
+				if (!this.client.amSeeding) this.sendMessage(Message.createNotInterested());
+				if (!this.peerInterested) this.shutdown();
+			}
+				
+        }
+        
+        timer.cancel();
+        
+        logger.info("End of thread with Peer " 
+				+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+				+ " ].");
+        this.interrupt();
 	}
 	
 	/**
@@ -643,9 +643,14 @@ public class Peer extends Thread{
 			return;
 		}
 		//logger.info("Sending {" + message_types[message.message_id + 1] + "} message to Peer " + ((this.peerId != null) ? ("ID : [ " + this.peerId) : ("IP : [ " + this.peerIp)) + " ].");
-		System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer "
-				+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
-				+ " ].");
+
+		//System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer "
+			//	+ "ID : [ " + this.peerId + "] with IP : [ " + this.peerIp
+			//	+ " ].");
+
+		System.out.println("Sending {" + message_types[message.message_id + 1] + "} message to Peer IP : [ " + this.peerIp);
+
+
 		try {
 			this.socketOutput.writeInt(message.length_prefix);
 			if (message.message_id != -1) {
