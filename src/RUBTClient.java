@@ -278,7 +278,7 @@ public class RUBTClient extends JFrame implements Runnable{
 					}
 					else if(client.onlyPeer == null){
 		        		System.out.println("Starting thread for Peer ID : [ " + peer.peerId + " ] and IP : [ " + peer.peerIp +" ].");
-		    			peer.start();
+		    			//peer.start();
 					//}
 					}
 				}
@@ -307,10 +307,10 @@ public class RUBTClient extends JFrame implements Runnable{
         
         // Thread start for client
         new Thread(client).start();
-        startGui(client);
+        //startGui(client);
         
 		//if (client.onlyPeer == null) {
-			PeerListener peerListener = client.new PeerListener(client.onlyPeer);
+			PeerListener peerListener = client.new PeerListener();
 			peerListener.runPeerListener();
 		//}
 	}
@@ -453,43 +453,20 @@ public class RUBTClient extends JFrame implements Runnable{
 		
 		public void runPeerListener() {
 			
-			ServerSocket serverSocket;
-			Socket peerSocket;
-			
-			try {
-				serverSocket = new ServerSocket(Request.port);
+			try (ServerSocket serverSocket = new ServerSocket(Request.port)){
 				logger.info("PeerListener is waiting for connections.");
 				
 				while (true) {
-					peerSocket = serverSocket.accept();
-					newPeer(peerSocket);
+					Socket peerSocket = serverSocket.accept();
+					System.out.println("ACCEPTED A NEW PEER!!!!!!!!");
+					Peer peer = new Peer(null, peerSocket.getInetAddress().getHostAddress(), Request.port, peerSocket, RUBTClient.this);
+					RUBTClient.this.peers.add(peer);
+					if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
+						new Thread(peer).start();
+					}
 				}
 			} catch (IOException e) {
 				e.printStackTrace();
-			}
-		}
-		
-		public void newPeer(Socket socket) {
-			
-			Peer peer = new Peer(null, socket.getInetAddress().getHostAddress(), socket.getPort(), RUBTClient.this);
-
-			if(this.onlyPeer != null){
-				if(peer.peerIp.equals(this.onlyPeer)){
-					System.out.println("equals");
-					RUBTClient.this.peers.add(peer);
-					if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
-						peer.start();
-					}
-				}
-				else{
-					System.out.println("Refused connection from " + peer.peerIp);
-				}
-			}
-			else{
-				RUBTClient.this.peers.add(peer);
-				if (RUBTClient.this.numOfActivePeers < RUBTClient.this.MAX_CONNECTIONS){
-					peer.start();
-				}
 			}
 		}
 	}
@@ -520,7 +497,7 @@ public class RUBTClient extends JFrame implements Runnable{
 				e.printStackTrace();
 			}
 			
-			for (Peer peer : RUBTClient.this.peers) {
+			for (Peer peer : RUBTClient.this.neighboring_peers) {
 				if (peer.socket != null) {
 					peer.shutdown();
 					RUBTClient.this.RUN = false;
@@ -535,7 +512,7 @@ public class RUBTClient extends JFrame implements Runnable{
 		}
 		
 		
-		
+		// TODO get rid of this and doing it with the gui
 		public void pause() {
 			new Request(RUBTClient.this, "stopped");
 		}
