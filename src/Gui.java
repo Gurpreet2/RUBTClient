@@ -170,15 +170,27 @@ public class Gui extends JFrame implements ActionListener{
 		status.setText("");
 		if(src == save){
 			if(max_dl_txt.getText().length() != 0){
-				client.DOWNLOAD_LIMIT = (Integer.getInteger(max_dl_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_dl_txt.getText()) * 100000);
+				if(Integer.parseInt(max_dl_txt.getText()) < 0){
+					max_dl_txt.setText("");
+					return;
+				}
+				client.DOWNLOAD_LIMIT = (Integer.parseInt(max_dl_txt.getText()) * 100000);
 				max_dl_txt.setText("" + client.DOWNLOAD_LIMIT / 100000);
 			}
 			if(max_up_txt.getText().length() != 0){
-				client.UPLOAD_LIMIT = (Integer.getInteger(max_up_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_up_txt.getText()) * 100000);
+				if(Integer.parseInt(max_up_txt.getText()) < 0){
+					max_up_txt.setText("");
+					return;
+				}
+				client.UPLOAD_LIMIT = (Integer.parseInt(max_up_txt.getText()) * 100000);
 				max_up_txt.setText("" + client.UPLOAD_LIMIT / 100000);
 			}
 			if(max_slots_txt.getText().length() != 0){
-				client.MAX_CONNECTIONS = (Integer.getInteger(max_slots_txt.getText()) * 100000 < 0 ? 0 : Integer.getInteger(max_slots_txt.getText()) * 100000);
+				if(Integer.parseInt(max_slots_txt.getText()) < 0){
+					max_slots_txt.setText("");
+					return;
+				}
+				client.MAX_CONNECTIONS = (Integer.parseInt(max_slots_txt.getText()));
 				max_slots_txt.setText("" + client.MAX_CONNECTIONS);
 			}
 		}

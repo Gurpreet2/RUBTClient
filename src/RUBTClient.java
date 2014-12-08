@@ -846,7 +846,7 @@ public class RUBTClient extends JFrame implements Runnable{
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
+			System.out.println("Quitting the client now");
 			for (Peer peer : RUBTClient.this.neighboring_peers) {
 				if (peer.socket != null) {
 					peer.shutdown();
