@@ -159,8 +159,12 @@ public class Message {
 					break;
 				case 2:
 					peer.peerInterested = true;
-					peer.optimisticChoke = false;
-					if (peer.amChoking) peer.sendMessage(createUnchoke()); //TODO fix, because peer can get out of choke by sending interesteds
+					if (peer.amChoking && peer.client.numOfUnchokedPeers < peer.client.MAX_UNCHOKED_PEERS) {
+						peer.sendMessage(createUnchoke()); //TODO fix, because peer can get out of choke by sending interesteds
+		        		peer.client.choked_peers.remove(peer);
+		        		peer.client.numOfUnchokedPeers++;
+		        		peer.client.unchoked_peers.add(peer);
+					}
 					break;
 				case 3:
 					peer.peerInterested = false;
@@ -186,7 +190,12 @@ public class Message {
 						// Send interested and unchoke since its a piece you want
 						if (!peer.sentGreetings) {
 				        	peer.sendMessage(createInterested());
-				        	if (peer.amChoking) peer.sendMessage(createUnchoke());
+				        	if (peer.amChoking && peer.client.numOfUnchokedPeers < peer.client.MAX_UNCHOKED_PEERS) {
+				        		peer.sendMessage(createUnchoke());
+				        		peer.client.choked_peers.remove(peer);
+				        		peer.client.numOfUnchokedPeers++;
+				        		peer.client.unchoked_peers.add(peer);
+				        	}
 				        	peer.sentGreetings = true;
 						}
 						peer.wantFromPeer++;
@@ -213,6 +222,14 @@ public class Message {
 					byte[] peerBitfield = new byte[length - 1];
 					dis.readFully(peerBitfield);
 					peer.peerBitfield = peerBitfield;
+					if (peerBitfield.length != (((double)peer.client.numOfPieces)/8 == (double)(peer.client.numOfPieces/8) ?
+							peer.client.numOfPieces/8 : peer.client.numOfPieces/8 + 1)) {
+						System.out.println("Incorrect bitfield size from Peer "
+								+ "ID : [ " + peer.peerId + "] with IP : [ " + peer.peerIp
+								+ " ].");
+						peer.shutdown();
+						break;
+					}
 					for (int i = 0; i < peer.client.numOfPieces; i++) {
 						boolean isBitSet = MyTools.isBitSet(peerBitfield, i);
 						if (isBitSet) {
@@ -227,7 +244,10 @@ public class Message {
 							//Send unchoke and interested if peer has something I want
 							if (!peer.sentGreetings) {
 							    peer.sendMessage(createInterested());
-							    if (peer.amChoking) peer.sendMessage(createUnchoke());
+					        	if (peer.amChoking && peer.client.numOfUnchokedPeers < peer.client.MAX_UNCHOKED_PEERS) {
+					        		peer.sendMessage(createUnchoke());
+					        		peer.client.choked_peers.remove(peer);
+					        	}
 							    peer.sentGreetings = true;
 							}
 							peer.wantFromPeer++;
