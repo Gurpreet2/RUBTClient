@@ -146,30 +146,40 @@ public class Gui extends JFrame implements ActionListener{
 				ArrayList<Peer> peers = client.peers;
 				int peer_index = 0;
 				Object[][] data = new Object[peers.size()][5];
+				Object temp;
 				for(int row=0; row < peers.size(); row++){
 					for(int col=0; col < 5; col++){
 						switch(col){
 							case 0:
-								data[row][col] = peers.get(peer_index).peerIp;
+								temp = peers.get(peer_index).peerIp;
+								table.setValueAt(temp, row, col);
 								break;
 							case 1:
-								data[row][col] = new Integer(6881);
+								temp = new Integer(6881);
+								table.setValueAt(temp, row, col);
+								//data[row][col] = new Integer(6881);
 								break;
 							case 2:
-								data[row][col] = peers.get(peer_index).percentPeerHas + "%";
+								temp = peers.get(peer_index).percentPeerHas + "%";
+								table.setValueAt(temp, row, col);
+								//data[row][col] = peers.get(peer_index).percentPeerHas + "%";
 								break;
 							case 3:
-								data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
+								temp = peers.get(peer_index).fileBytesDownloaded / 100000 + "KB";
+								table.setValueAt(temp, row, col);
+								//data[row][col] = (peers.get(peer_index).fileBytesUploaded / 100000) + "KB";
 								break;
 							case 4:
-								data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
+								temp = peers.get(peer_index).fileBytesUploaded / 100000 + "KB";
+								table.setValueAt(temp, row, col);
+								//data[row][col] = (peers.get(peer_index).fileBytesDownloaded / 100000) + "KB";
 								break;
 						}
 					}
 					peer_index++;
 				}
 				table.repaint();
-				table = new JTable(data, columnNames);
+				//table = new JTable(data, columnNames);
 			}
 			
 		}, 1, 2000);
