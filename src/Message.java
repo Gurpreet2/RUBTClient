@@ -175,6 +175,10 @@ public class Message {
 					if (!peer.peerHaveArray[piece_index]) {
 						peer.peerHaveArray[piece_index] = true;
 						peer.peerHaveArraySize++;
+						if (peer.peerHaveArraySize != peer.client.numOfPieces)
+							peer.percentPeerHas = peer.peerHaveArraySize * 100 / peer.client.numOfPieces;
+						else
+							peer.percentPeerHas = 100;
 					} else
 						break;
 					//create a new request message to get the piece if client doesn't have it
@@ -211,7 +215,14 @@ public class Message {
 					peer.peerBitfield = peerBitfield;
 					for (int i = 0; i < peer.client.numOfPieces; i++) {
 						boolean isBitSet = MyTools.isBitSet(peerBitfield, i);
-						if (isBitSet) peer.peerHaveArray[i] = true;
+						if (isBitSet) {
+							peer.peerHaveArray[i] = true;
+							peer.peerHaveArraySize++;
+							if (peer.peerHaveArraySize != peer.client.numOfPieces)
+								peer.percentPeerHas = peer.peerHaveArraySize * 100 / peer.client.numOfPieces;
+							else
+								peer.percentPeerHas = 100;
+						}
 						if (isBitSet && !peer.client.havePieces[i]) {
 							//Send unchoke and interested if peer has something I want
 							if (!peer.sentGreetings) {
